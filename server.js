@@ -12,19 +12,31 @@ const BUILDING_IDS = ['job', 'cert', 'trip', 'rest', 'story', 'soon'];
 const MAX_PLAYERS = 100;                 // 동시 접속 최대 인원 (서버 1대)
 const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대 개수 (사실상 영구)
 const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보내는 최근 개수
-const W = 1400, H = 920;
+const KEEP_COMMENTS = 300, SHOW_COMMENTS = 30;  // 글 하나당 댓글: 보관 최대 / 화면에 보내는 최근 개수
+const W = 1600, H = 1000;                       // 마을 크기(화면과 같아야 해요)
 
 /* ---------- 저장되는 데이터: 등불, 건물별 글 ---------- */
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let db = { pledges: [], posts: {} };
-try { db = Object.assign(db, JSON.parse(fs.readFileSync(DATA, 'utf8'))); }
-catch (e) { if (e.code !== 'ENOENT') { console.error('data.json을 읽지 못했어요. 덮어쓰지 않도록 종료합니다:', e.message); process.exit(1); } }
+/* 읽기: 파일이 없으면 새로 시작. 완전히 빈 파일(0바이트)이면 가장 최근의 멀쩡한 백업으로 복구하고, 없으면 새로 시작해요.
+   내용은 있는데 깨져 있으면 덮어써서 날리지 않도록 멈춰요. */
+const readJson = f => { const t = fs.readFileSync(f, 'utf8'); return t.trim() ? JSON.parse(t) : null; };
+try {
+  const cur = readJson(DATA);
+  if (cur) db = Object.assign(db, cur);
+  else {
+    console.warn('data.json이 비어 있어요. 백업에서 복구를 시도합니다.');
+    const baks = fs.readdirSync(DATA_DIR).filter(f => /^data-.*\.bak\.json$/.test(f)).sort().reverse();
+    for (const f of baks) { try { const b = readJson(path.join(DATA_DIR, f)); if (b) { db = Object.assign(db, b); console.warn('백업 ' + f + ' 에서 복구했어요.'); break; } } catch (e) {} }
+  }
+} catch (e) { if (e.code !== 'ENOENT') { console.error('data.json을 읽지 못했어요(내용이 깨져 있어요). 덮어쓰지 않도록 종료합니다:', e.message); process.exit(1); } }
 BUILDING_IDS.forEach(id => { db.posts[id] = db.posts[id] || []; });
 /* 글마다 번호(id)와 좋아요 누른 사람 목록(likes)이 있어요. 번호가 없는 예전 글에는 번호를 붙여요. */
 db.nextPostId = db.nextPostId || 1;
-BUILDING_IDS.forEach(id => db.posts[id].forEach(p => { if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; }));
-/* 화면에 보내는 모양: 누가 눌렀는지(uid)는 숨기고, 개수와 "내가 눌렀는지"만 알려줘요 */
-const view = (p, uid) => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid) });
+BUILDING_IDS.forEach(id => db.posts[id].forEach(p => { if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; if (!Array.isArray(p.comments)) p.comments = []; }));
+/* 화면에 보내는 모양: 누가 눌렀는지(uid)는 숨기고, 개수와 "내가 눌렀는지"만 알려줘요. 댓글은 최근 SHOW_COMMENTS개만(전체 개수는 cn) */
+const view = (p, uid) => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid),
+  comments: p.comments.slice(-SHOW_COMMENTS), cn: p.comments.length });
 /* 접속할 때: 최근 글 + 좋아요 많은 2개(오래된 글이어도 인기글은 보여야 하니까) */
 function postsFor(id, uid) {
   const all = db.posts[id];
@@ -37,18 +49,20 @@ function postsFor(id, uid) {
 let saveT, lastBackup = '';
 function flush() {
   clearTimeout(saveT);
-  const tmp = DATA + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db));
-  fs.renameSync(tmp, DATA);
+  /* 하루 1번 백업: 새로 덮어쓰기 "전에" 지금 있는 멀쩡한 파일을 복사해요(방금 쓴 파일을 복사하면 같이 망가질 수 있어서) */
   const day = new Date().toISOString().slice(0, 10);
   if (day !== lastBackup) {
     lastBackup = day;
     try {
-      fs.copyFileSync(DATA, path.join(DATA_DIR, 'data-' + day + '.bak.json'));
+      if (fs.existsSync(DATA) && fs.statSync(DATA).size > 0) fs.copyFileSync(DATA, path.join(DATA_DIR, 'data-' + day + '.bak.json'));
       fs.readdirSync(DATA_DIR).filter(f => /^data-.*\.bak\.json$/.test(f)).sort().slice(0, -14)
         .forEach(f => fs.unlinkSync(path.join(DATA_DIR, f)));
     } catch (e) {}
   }
+  /* 임시 파일에 쓰고 디스크에 완전히 기록(fsync)한 뒤 교체해요. 갑자기 꺼져도 빈 파일이 남지 않게 하려는 거예요. */
+  const tmp = DATA + '.tmp', fd = fs.openSync(tmp, 'w');
+  try { fs.writeSync(fd, JSON.stringify(db)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  fs.renameSync(tmp, DATA);
 }
 const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { flush(); } catch (e) { console.error('저장 실패', e.message); } }, 500); };
 /* 재배포·종료 신호가 오면 마지막으로 저장하고 꺼져요 */
@@ -117,9 +131,17 @@ wss.on('connection', ws => {
       if (now - me.last < 1500) return; me.last = now;
       if (!BUILDING_IDS.includes(m.b)) return;
       const text = str(m.text, 300); if (!text) return;
-      const post = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), likes: [] };
+      const post = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), likes: [], comments: [] };
       db.posts[m.b].push(post); db.posts[m.b] = db.posts[m.b].slice(-KEEP_POSTS); save();
       broadcast({ t: 'post', b: m.b, post: view(post, null) });
+    } else if (m.t === 'comment') {
+      if (now - (me.lastC || 0) < 1000) return; me.lastC = now;
+      if (!BUILDING_IDS.includes(m.b)) return;
+      const post = db.posts[m.b].find(p => p.id === Number(m.id)); if (!post) return;
+      const text = str(m.text, 150); if (!text) return;
+      const c = { name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) };
+      post.comments.push(c); post.comments = post.comments.slice(-KEEP_COMMENTS); save();
+      broadcast({ t: 'comment', b: m.b, id: post.id, c, cn: post.comments.length });
     } else if (m.t === 'like') {
       /* 한 사람(브라우저)당 글마다 한 번만. 이미 눌렀으면 개수만 다시 알려줘요 */
       if (!BUILDING_IDS.includes(m.b)) return;
