@@ -54,7 +54,14 @@
   .story .tag{background:var(--paper2);border-radius:999px;padding:1px 8px;font-size:11px}
   .story h4{margin:0 0 4px;font-size:15px}
   .story p{margin:0;font-size:14px;line-height:1.6;color:#3d4132}
-  .story.mine{border-color:var(--olive);background:#f7fbe9}
+  .story.example{border-style:dashed;border-color:var(--accent);background:#fff7ec}
+  .story.example .tag{background:var(--accent);color:#fff}
+  .story.hot{border-color:#e0572f;background:#fff4ef}
+  .story .hotTag{background:#e0572f;color:#fff}
+  .likeRow{margin-top:8px}
+  .like{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700;color:var(--ink)}
+  .like:hover:not([disabled]){border-color:#e0572f}
+  .like.on{background:#fde7df;border-color:#e0572f;color:#b23a18;cursor:default}
   textarea,input[type=text],input[type=date]{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
   textarea{min-height:84px;resize:vertical}
   .row{display:flex;gap:8px;margin-top:8px}
@@ -137,54 +144,30 @@ const W = 1400, H = 920;
 const BUILDINGS = [
   { id:'job', name:'취업관', emoji:'💼', x:150, y:110, w:230, h:150, wall:'#c9b48a', roof:'#4f6d8f',
     desc:'공채·수시채용, 이력서, 면접 준비',
-    tips:[['📌','전역 직후 3개월이 가장 시간이 많은 시기 — 이력서 초안부터 써 두기'],['📌','군 경력(리더십·정비·통신 등)을 직무 언어로 바꿔 쓰는 연습이 핵심'],['📌','전직지원 프로그램·국민내일배움카드 등 혜택은 전역 전후에 신청 시기를 확인']],
-    stories:[
-      ['예시 · 선배 A','병장 전역 · 중견기업 입사','전역하고 한 달은 놀았고, 두 번째 달에 자소서 열 개를 써봤어요.','"군대에서 한 일"을 쓰지 말고 "그래서 내가 얻은 것"을 쓰라는 말이 제일 도움이 됐어요.'],
-      ['예시 · 선배 B','중소기업 → 이직 준비 중','첫 취업은 빨리 하는 게 좋지만, 첫 회사가 전부는 아니에요.','불안해서 아무 데나 넣기보다, 일단 어떤 직무가 있는지부터 구경하세요.']]},
+    example:'이력서에 군 경력을 어떻게 써야 할지 막막해요. 직무와 연결해서 써 보신 분, 방법 좀 알려 주세요.' },
   { id:'cert', name:'자격증 도서관', emoji:'📚', x:580, y:90, w:240, h:160, wall:'#d8c8a0', roof:'#7a4b3a',
     desc:'자격증·어학·공시 준비 스터디',
-    tips:[['📌','목표 직무가 없다면 컴활·한국사·토익처럼 범용 자격부터 시작'],['📌','접수 일정은 시험마다 다르니 올해 일정표를 먼저 정리'],['📌','혼자는 3주를 못 가요. 같은 시기 전역자와 스터디를 만들어 보세요']],
-    stories:[
-      ['예시 · 선배 C','공시 1년 준비 후 합격','전역 후 바로 시작했는데, 하루 루틴을 군대처럼 짜니까 오히려 편했어요.','대신 일요일은 반드시 쉬었어요. 쉬는 날이 없으면 오래 못 가요.'],
-      ['예시 · 선배 D','자격증 3개 취득','아무거나 따다가 시간만 썼어요. 목표 직무부터 정하세요.','"왜 이 자격증인지" 한 줄로 못 쓰면 일단 멈추는 게 맞았어요.']]},
-  { id:'biz', name:'창업 공방', emoji:'🛠️', x:1000, y:110, w:230, h:150, wall:'#bfa57e', roof:'#8a5a2b',
-    desc:'아이디어, 사이드 프로젝트, 작은 창업',
-    tips:[['📌','처음부터 큰 창업 말고, 작은 사이드 프로젝트로 검증해 보기'],['📌','지원사업(청년창업, 예비창업패키지)은 모집 시기가 정해져 있어요'],['📌','만든 걸 일단 공개하면 피드백이 생기고, 피드백이 동기가 돼요']],
-    stories:[
-      ['예시 · 선배 E','전역 후 소규모 온라인 판매','군대에서 알게 된 불편함이 아이템이 됐어요.','첫 달 매출 3만원. 그래도 처음으로 "내 것"이라는 느낌이 들었어요.']]},
+    example:'전역하고 첫 자격증으로 뭘 준비하셨나요? 목표 직무가 아직 없을 때 어떤 기준으로 골랐는지 궁금해요.' },
   { id:'trip', name:'여행사', emoji:'🧳', x:150, y:610, w:230, h:150, wall:'#d4bf94', roof:'#2f7f86',
     desc:'여행, 워킹홀리데이, 해외 경험',
-    tips:[['📌','워킹홀리데이는 나이·신청 시기 제한이 있으니 미리 확인'],['📌','예산을 먼저 정하고, 일정은 느슨하게'],['📌','여행도 기록을 남기면 나중에 이력서와 면접의 재료가 돼요']],
-    stories:[
-      ['예시 · 선배 F','전역 직후 한 달 유럽','아무 계획 없이 갔다 왔는데, 돌아오니 하고 싶은 게 생겼어요.','쉬는 것도 계획의 일부예요. 죄책감 가지지 마세요.']]},
+    example:'전역하고 첫 여행을 다녀오신 분 계신가요? 예산은 어떻게 잡으셨는지 궁금해요.' },
   { id:'rest', name:'쉼터', emoji:'🍵', x:580, y:640, w:240, h:150, wall:'#cdbb92', roof:'#6b7f4a',
     desc:'막막할 때, 마음 이야기',
-    tips:[['📌','"나만 뒤처진 것 같다"는 느낌은 거의 모두가 겪어요'],['📌','하루 한 가지만 해도 충분해요. 운동, 산책, 정리 중 하나'],['📌','너무 힘들면 전문 상담(청소년상담복지·정신건강복지센터 등)도 방법이에요']],
-    stories:[
-      ['예시 · 선배 G','전역 후 두 달 방황','매일 늦게 일어나고, 휴대폰만 보다 하루가 갔어요.','아침에 나가서 걷기부터 했더니 조금씩 생각이 정리됐어요.']]},
+    example:'전역하고 나니 괜히 불안하고 막막한 날이 많아요. 여러분은 그런 날 어떻게 보내세요?' },
   { id:'story', name:'군대 썰방', emoji:'🔥', x:30, y:340, w:200, h:140, wall:'#c4a679', roof:'#a14a2f',
     desc:'군대에서 있었던 일, 웃긴 썰·힘들었던 썰 풀기',
-    cta:'썰 풀기', ph:'그때 있었던 일, 지금 돌아보니 어떤가요? (부대 이름·실명은 빼고 써 주세요)',
-    tips:[['🔒','부대 이름·위치, 훈련·작전 내용 등 군사 기밀이 될 수 있는 내용은 쓰지 마세요'],['🙅','실명이나 특정인을 알아볼 수 있는 비방은 올리지 않아요'],['😄','웃긴 썰, 힘들었던 썰, 그 경험이 지금 어떻게 남았는지 모두 환영해요']],
-    stories:[
-      ['예시 · 썰','행군 후 첫 샤워','행군이 끝나고 처음 한 샤워가 군 생활 중 가장 행복한 순간이었어요.','전역하고 힘든 일이 있으면 "그때보다는 낫다"고 생각하게 돼요.'],
-      ['예시 · 썰','내무반 라면 파티','야식 먹다가 걸릴 뻔한 이야기, 지금 생각하면 웃음만 나요.','결국 가장 기억에 남는 건 그때 같이 있던 사람들이에요.']]},
+    cta:'썰 풀기', ph:'그때 있었던 일, 지금 돌아보니 어떤가요?',
+    notice:'부대 이름·위치, 훈련·작전 내용 등 군사 기밀이 될 수 있는 내용과 실명 비방은 쓰지 마세요.',
+    example:'행군이 끝나고 처음 한 샤워가 군 생활 중 가장 행복한 순간이었어요. 여러분의 최고의 순간은 언제였나요?' },
   { id:'soon', name:'전역 준비관', emoji:'📅', x:1170, y:340, w:200, h:140, wall:'#cbb58c', roof:'#3f6b5a',
     desc:'곧 전역하는 사람들을 위한 준비 공간',
     cta:'전역 준비 이야기 남기기', ph:'전역까지 남은 기간, 고민, 준비 중인 것을 남겨 보세요',
-    tips:[['📌','전역 전에 하고 싶은 일을 한 줄이라도 정해 두면 막막함이 줄어요'],['📌','전직지원·교육·휴가 제도는 부대마다 안내가 달라요. 행정 담당에게 미리 확인하세요'],['📌','전역 후 3개월을 쉬기 · 준비 · 시작으로 대략 나눠 보세요'],['📌','선배 라운지에서 먼저 겪은 사람들에게 질문해 보세요']],
-    stories:[
-      ['예시 · 선배 I','전역 D-30에 한 일','D-30에 할 일 목록을 쓰고 하루 하나씩 지웠어요.','전역날 아침에 목록이 비어 있어서 조금 든든했어요.']]},
-  { id:'senior', name:'선배 라운지', emoji:'🎖️', x:1000, y:610, w:230, h:150, wall:'#c6ad82', roof:'#8c3b3b',
-    desc:'먼저 겪은 선배들의 경험 공유',
-    tips:[['📌','선배의 길이 정답은 아니에요. 어떻게 선택했는지를 보세요'],['📌','궁금한 걸 구체적으로 물어볼수록 좋은 답이 와요'],['📌','나중에 나도 후배에게 돌려주는 선순환이 이 마을의 목표예요']],
-    stories:[
-      ['예시 · 선배 H','전역 3년 차','돌아보면 그때 가장 필요했던 건 정보보다 "비슷한 사람들"이었어요.','그래서 이 마을이 필요하다고 생각해요.']]},
+    example:'전역 D-30인데 뭘 준비해야 할지 모르겠어요. 먼저 전역하신 분들은 이 시기에 뭘 하셨나요?' },
 ];
 BUILDINGS.forEach(b => {
   b.door = { x: b.x + b.w/2, y: b.y + b.h + 22 };
   /* 아래 줄 건물은 광장에서 문까지 옆길로 돌아가요 */
-  b.lane = b.y > 300 ? { x: ({ trip:b.x+b.w+34, rest:b.x+b.w+34, senior:b.x-34, story:b.x+b.w+34, soon:b.x-34 })[b.id] } : null;
+  b.lane = b.y > 300 ? { x: ({ trip:b.x+b.w+34, rest:b.x+b.w+34, story:b.x+b.w+34, soon:b.x-34 })[b.id] } : null;
 });
 const PLAZA = { x: 700, y: 440 };
 const TREES = [[60,60],[1330,70],[70,860],[1320,860],[470,330],[920,330],[470,520],[930,540],[700,60],[700,860],[430,200],[980,420],[440,780],[1180,520]];
@@ -211,12 +194,18 @@ const npcs = NPC_NAMES.map((n,i) => ({
 /* ---------- 실시간 접속 (서버가 없으면 예시 모드로 동작) ---------- */
 const net = { on:false, ws:null, id:0, players:new Map(), pledges:[], posts:{}, rerender:null, t:0, lx:0, ly:0,
   send(m){ if(this.on && this.ws && this.ws.readyState===1) this.ws.send(JSON.stringify(m)); } };
+/* 좋아요를 한 번만 누르게 하려고 브라우저마다 고유 번호를 만들어 서버에 알려요(로그인 대신) */
+function myUid(){
+  let u = store.get('hv_uid', '');
+  if(!u){ u = (crypto.randomUUID ? crypto.randomUUID() : 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)); store.set('hv_uid', u); }
+  return u;
+}
 function addRemote(p){ net.players.set(p.id, { ...p, tx:p.x, ty:p.y, step:0, say:'', sayT:0 }); }
 function connect(){
   if(!/^https?:$/.test(location.protocol)) return;
   let ws; try{ ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host); }catch(e){ return; }
   net.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ t:'join', name:me.name, uni:me.uni, cap:me.cap, x:me.x, y:me.y }));
+  ws.onopen = () => ws.send(JSON.stringify({ t:'join', uid:myUid(), name:me.name, uni:me.uni, cap:me.cap, x:me.x, y:me.y }));
   ws.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch(_){ return; }
     if(m.t==='init'){ net.on=true; net.id=m.id; net.players.clear(); m.players.forEach(addRemote); net.pledges=m.pledges||[]; net.posts=m.posts||{}; toast('🌐 실시간으로 연결됐어요'); }
@@ -226,6 +215,7 @@ function connect(){
     else if(m.t==='say'){ const r=net.players.get(m.id); if(r){ r.say=m.text; r.sayT=4.5; logChat(r.name, m.text); } }
     else if(m.t==='pledge') net.pledges.push(m.p);
     else if(m.t==='post'){ (net.posts[m.b] = net.posts[m.b]||[]).push(m.post); if(net.rerender) net.rerender(m.b); }
+    else if(m.t==='like'){ const p=(net.posts[m.b]||[]).find(x=>x.id===m.id); if(p){ p.likes=m.n; if(m.you) p.liked=true; if(net.rerender) net.rerender(m.b); } }
     else if(m.t==='full') toast('마을이 가득 찼어요. 잠시 후 다시 시도해 주세요');
   };
   ws.onclose = () => { const was=net.on; net.on=false; net.players.clear(); if(was) toast('연결이 끊겼어요. 다시 연결 중…'); if(started) setTimeout(connect, 3000); };
@@ -566,34 +556,59 @@ function closeModal(){ inModal=false; $('#modal').classList.remove('show'); }
 window.__close = closeModal;
 $('#modal').addEventListener('pointerdown', e => { if(e.target.id==='modal') closeModal(); });
 
+/* 글 목록: 로컬 저장(오프라인) 또는 서버(온라인)를 같은 모양으로 다뤄요 */
+const LIKED_KEY = 'hv_liked';
+function getPosts(b){
+  if(net.on) return net.posts[b.id] || [];
+  const liked = store.get(LIKED_KEY, []);
+  return store.get('hv_posts_'+b.id, []).map((p,i) => ({ id:p.id || 'l'+i, name:p.name, text:p.text, date:p.date, likes:p.likes||0, liked:liked.includes(b.id+':'+(p.id||'l'+i)) }));
+}
+function likePost(b, id){
+  if(net.on){ net.send({ t:'like', b:b.id, id }); return; }
+  const key = 'hv_posts_'+b.id, arr = store.get(key, []), liked = store.get(LIKED_KEY, []), lk = b.id+':'+id;
+  if(liked.includes(lk)) return;
+  const p = arr.find((x,i) => (x.id || 'l'+i) === id); if(!p) return;
+  p.id = id; p.likes = (p.likes||0) + 1; liked.push(lk);
+  store.set(key, arr); store.set(LIKED_KEY, liked);
+}
+/* 인기글 2개: 좋아요가 1개 이상인 글 중 많은 순(같으면 먼저 쓴 글). 나머지는 최신순 */
+function sortPosts(posts){
+  const popular = posts.filter(p => p.likes > 0).sort((a,c) => c.likes - a.likes || posts.indexOf(a) - posts.indexOf(c)).slice(0,2);
+  const rest = posts.filter(p => !popular.includes(p)).reverse();
+  return { popular, rest };
+}
+
 function openBuilding(b){
-  const key = 'hv_posts_'+b.id;
+  const postHtml = (p, hot) => `<div class="story${hot?' hot':''}">
+      <div class="who">${hot?'<span class="tag hotTag">🔥 인기글</span>':''}<span>${esc(p.name)}</span><span>· ${esc(p.date)}</span></div>
+      <p>${esc(p.text).replace(/\n/g,'<br>')}</p>
+      <div class="likeRow"><button class="like${p.liked?' on':''}" data-id="${esc(p.id)}" ${p.liked?'disabled':''}>${p.liked?'❤️':'🤍'} ${p.likes||0}</button></div>
+    </div>`;
   const render = () => {
-    const mine = net.on ? (net.posts[b.id]||[]) : store.get(key, []);
-    const stories = b.stories.map(s => `<div class="story"><div class="who"><span class="tag">${esc(s[0])}</span>${esc(s[1])}</div><h4>${esc(s[2])}</h4><p>${esc(s[3])}</p></div>`).join('');
-    const posts = mine.map(p => `<div class="story mine"><div class="who"><span class="tag">내 글</span>${esc(p.name)} · ${esc(p.date)}</div><p>${esc(p.text).replace(/\n/g,'<br>')}</p></div>`).join('');
+    const { popular, rest } = sortPosts(getPosts(b));
     $('#mcard').innerHTML = `
       <header><div class="ico" style="background:${b.roof};color:#fff">${b.emoji}</div><div><h2>${esc(b.name)}</h2><p>${esc(b.desc)}</p></div><button class="x" onclick="window.__close()">×</button></header>
       <div class="body">
-        <h3>알아두면 좋은 것</h3>
-        ${b.tips.map(t=>`<div class="tip"><i>${t[0]}</i><span>${esc(t[1])}</span></div>`).join('')}
-        <h3>선배들의 이야기</h3>
-        ${stories}
-        ${posts ? '<h3>마을 사람들의 글</h3>'+posts : ''}
+        <div class="story example"><div class="who"><span class="tag">📌 예시</span><span>이런 식으로 남겨 보세요</span></div><p>${esc(b.example)}</p></div>
+        ${popular.map(p => postHtml(p, true)).join('')}
         <h3>${esc(b.cta || '나도 한마디 남기기')}</h3>
         <textarea id="pt" maxlength="300" placeholder="${esc(b.ph || '이 분야에서 내가 해본 것, 궁금한 것, 도움이 된 정보를 남겨 주세요')}"></textarea>
         <div class="row"><button class="primary" id="ptGo">남기기</button></div>
-        <p class="note">※ 위 선배 이야기는 예시입니다. ${net.on ? '남긴 글은 접속한 모두에게 보여요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
+        <p class="note">${b.notice ? '🔒 '+esc(b.notice)+'<br>' : ''}${net.on ? '남긴 글은 접속한 모두에게 보여요. 좋아요는 글마다 한 번만 누를 수 있어요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
+        ${rest.length ? '<h3>모든 글 (최신순)</h3>'+rest.map(p => postHtml(p, false)).join('') : ''}
       </div>`;
     $('#ptGo').onclick = () => {
       const v = $('#pt').value.trim(); if(!v) return;
       if(net.on){ net.send({ t:'post', b:b.id, text:v }); $('#pt').value=''; return; } /* 서버가 돌려주면 화면에 나타나요 */
-      const arr = store.get(key, []); arr.push({ name: me.name, text: v, date: new Date().toLocaleDateString('ko-KR') });
+      const key = 'hv_posts_'+b.id, arr = store.get(key, []);
+      arr.push({ id:'l'+Date.now(), name: me.name, text: v, date: new Date().toLocaleDateString('ko-KR'), likes:0 });
       store.set(key, arr); render();
-      $('#mcard').scrollTo({ top: 99999, behavior:'smooth' });
     };
+    $('#mcard').querySelectorAll('.like:not([disabled])').forEach(btn => { btn.onclick = () => { likePost(b, btn.dataset.id); if(!net.on) rerender(); }; });
   };
-  net.rerender = id => { if(inModal && id===b.id){ const d=$('#pt') ? $('#pt').value : ''; render(); $('#pt').value=d; $('#mcard').scrollTo({ top: 99999, behavior:'smooth' }); } };
+  /* 새 글·좋아요가 오면 쓰던 글과 스크롤 위치를 유지한 채 다시 그려요 */
+  const rerender = () => { const d=$('#pt') ? $('#pt').value : '', top=$('#mcard').scrollTop; render(); $('#pt').value=d; $('#mcard').scrollTop=top; };
+  net.rerender = id => { if(inModal && id===b.id) rerender(); };
   inModal = true; $('#modal').classList.add('show'); render();
 }
 })();

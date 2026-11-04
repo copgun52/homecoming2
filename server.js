@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 /* 기록은 DATA_DIR(배포 환경에서는 지워지지 않는 디스크 경로)에 저장해요 */
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA = path.join(DATA_DIR, 'data.json');
-const BUILDING_IDS = ['job', 'cert', 'biz', 'trip', 'rest', 'senior', 'story', 'soon'];
+const BUILDING_IDS = ['job', 'cert', 'trip', 'rest', 'story', 'soon'];
 const MAX_PLAYERS = 100;                 // 동시 접속 최대 인원 (서버 1대)
 const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대 개수 (사실상 영구)
 const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보내는 최근 개수
@@ -20,6 +20,18 @@ let db = { pledges: [], posts: {} };
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DATA, 'utf8'))); }
 catch (e) { if (e.code !== 'ENOENT') { console.error('data.json을 읽지 못했어요. 덮어쓰지 않도록 종료합니다:', e.message); process.exit(1); } }
 BUILDING_IDS.forEach(id => { db.posts[id] = db.posts[id] || []; });
+/* 글마다 번호(id)와 좋아요 누른 사람 목록(likes)이 있어요. 번호가 없는 예전 글에는 번호를 붙여요. */
+db.nextPostId = db.nextPostId || 1;
+BUILDING_IDS.forEach(id => db.posts[id].forEach(p => { if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; }));
+/* 화면에 보내는 모양: 누가 눌렀는지(uid)는 숨기고, 개수와 "내가 눌렀는지"만 알려줘요 */
+const view = (p, uid) => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid) });
+/* 접속할 때: 최근 글 + 좋아요 많은 2개(오래된 글이어도 인기글은 보여야 하니까) */
+function postsFor(id, uid) {
+  const all = db.posts[id];
+  const top = all.filter(p => p.likes.length > 0).sort((a, b) => b.likes.length - a.likes.length || a.id - b.id).slice(0, 2);
+  const picked = new Map(); [...all.slice(-SHOW_POSTS), ...top].forEach(p => picked.set(p.id, p));
+  return [...picked.values()].sort((a, b) => a.id - b.id).map(p => view(p, uid));
+}
 
 /* 저장은 임시 파일에 쓴 뒤 교체해서, 도중에 꺼져도 기존 파일이 깨지지 않아요. 하루 1번 백업도 남겨요(최근 14개). */
 let saveT, lastBackup = '';
@@ -80,7 +92,8 @@ wss.on('connection', ws => {
       me.joined = true; me.name = str(m.name, 8) || '새내기'; me.uni = color(m.uni); me.cap = color(m.cap);
       me.x = num(m.x, 0, W, 700); me.y = num(m.y, 0, H, 560);
       players.set(ws, me);
-      const recent = {}; BUILDING_IDS.forEach(id => { recent[id] = db.posts[id].slice(-SHOW_POSTS); });
+      me.uid = typeof m.uid === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.uid) ? m.uid : 'conn-' + me.id; // 브라우저 고유 번호(좋아요 1회 제한용)
+      const recent = {}; BUILDING_IDS.forEach(id => { recent[id] = postsFor(id, me.uid); });
       send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: db.pledges.slice(-SHOW_PLEDGES), posts: recent });
       broadcast({ t: 'join', p: pub(me) }, ws);
       return;
@@ -104,9 +117,17 @@ wss.on('connection', ws => {
       if (now - me.last < 1500) return; me.last = now;
       if (!BUILDING_IDS.includes(m.b)) return;
       const text = str(m.text, 300); if (!text) return;
-      const post = { name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) };
+      const post = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), likes: [] };
       db.posts[m.b].push(post); db.posts[m.b] = db.posts[m.b].slice(-KEEP_POSTS); save();
-      broadcast({ t: 'post', b: m.b, post });
+      broadcast({ t: 'post', b: m.b, post: view(post, null) });
+    } else if (m.t === 'like') {
+      /* 한 사람(브라우저)당 글마다 한 번만. 이미 눌렀으면 개수만 다시 알려줘요 */
+      if (!BUILDING_IDS.includes(m.b)) return;
+      const post = db.posts[m.b].find(p => p.id === Number(m.id)); if (!post) return;
+      if (!post.likes.includes(me.uid)) { post.likes.push(me.uid); save(); }
+      const n = post.likes.length;
+      broadcast({ t: 'like', b: m.b, id: post.id, n }, ws);
+      send(ws, { t: 'like', b: m.b, id: post.id, n, you: true });
     }
   });
 
