@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>복귀마을 — 전역 후 첫걸음</title>
+<style>
+  :root{
+    --bg:#2b3326; --ink:#2a2f24; --paper:#f4efe2; --paper2:#e8e1cd; --olive:#5d6b3a; --olive-d:#43502a;
+    --accent:#d9822b; --muted:#7a7a66; --line:#d6cdb4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  button{font:inherit;cursor:pointer}
+
+  /* HUD */
+  .hud{position:fixed;left:12px;top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+  .chip{background:rgba(244,239,226,.92);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+  .chip b{color:var(--olive-d)}
+  .bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:8px;z-index:5}
+  .bar button,.enter{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-weight:700;font-size:14px;box-shadow:0 3px 0 var(--line),0 6px 14px rgba(0,0,0,.22);color:var(--ink)}
+  .bar button:active,.enter:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
+  .bar{flex-wrap:wrap;justify-content:center;width:min(760px,96vw)}
+  .chatrow{display:flex;gap:6px;flex:1 1 240px;max-width:340px}
+  #chat{flex:1;min-width:0;border-radius:14px;box-shadow:0 3px 0 var(--line),0 6px 14px rgba(0,0,0,.22)}
+  #log{position:fixed;left:12px;bottom:84px;width:min(300px,70vw);display:flex;flex-direction:column;gap:4px;pointer-events:none;z-index:4}
+  #log div{background:rgba(30,34,24,.72);color:#fff;border-radius:10px;padding:5px 10px;font-size:12.5px;line-height:1.4;word-break:break-all}
+  #log div b{color:#ffd37a;margin-right:4px}
+  #log div.me b{color:#bfe39a}
+  .enter{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--accent);color:#fff;border-color:#b86a1c;box-shadow:0 3px 0 #b86a1c,0 8px 18px rgba(0,0,0,.3);display:none;z-index:6;animation:pop .25s ease}
+  .enter.show{display:block}
+  @keyframes pop{from{transform:translateX(-50%) scale(.85);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+  .hint{position:fixed;right:12px;top:12px;font-size:12px;color:#e8e1cd;opacity:.85;text-align:right;line-height:1.5;pointer-events:none}
+
+  /* overlay / modal */
+  .overlay{position:fixed;inset:0;background:rgba(20,24,16,.62);display:none;align-items:center;justify-content:center;z-index:20;padding:14px}
+  .overlay.show{display:flex}
+  .card{background:var(--paper);border-radius:20px;width:min(640px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.45);animation:rise .22s ease}
+  @keyframes rise{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+  .card header{padding:20px 22px 14px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:center;position:sticky;top:0;background:var(--paper);z-index:1}
+  .card header .ico{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:28px;flex:none}
+  .card header h2{margin:0;font-size:20px}
+  .card header p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+  .x{margin-left:auto;background:none;border:0;font-size:24px;color:var(--muted);padding:4px 8px}
+  .body{padding:16px 22px 22px}
+  .body h3{font-size:13px;letter-spacing:.04em;color:var(--olive-d);margin:18px 0 8px;text-transform:none}
+  .body h3:first-child{margin-top:0}
+  .tip{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px;line-height:1.5}
+  .tip i{font-style:normal;flex:none}
+  .story{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .story .who{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;margin-bottom:4px}
+  .story .tag{background:var(--paper2);border-radius:999px;padding:1px 8px;font-size:11px}
+  .story h4{margin:0 0 4px;font-size:15px}
+  .story p{margin:0;font-size:14px;line-height:1.6;color:#3d4132}
+  .story.mine{border-color:var(--olive);background:#f7fbe9}
+  textarea,input[type=text],input[type=date]{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+  textarea{min-height:84px;resize:vertical}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .primary{background:var(--olive);color:#fff;border:0;border-radius:12px;padding:10px 16px;font-weight:700}
+  .primary:hover{background:var(--olive-d)}
+  .note{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* start screen */
+  .start .card{width:min(460px,100%)}
+  .start h1{margin:0 0 4px;font-size:26px;letter-spacing:-.02em}
+  .start .sub{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.55}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--olive-d);margin-bottom:6px}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .sw{width:34px;height:34px;border-radius:50%;border:3px solid transparent;box-shadow:0 0 0 1px var(--line)}
+  .sw.on{border-color:var(--ink)}
+  .picker{position:relative;height:132px;border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}
+  .pick-hl{position:absolute;left:8px;right:8px;top:44px;height:44px;border-radius:10px;background:rgba(93,107,58,.14);border:1px solid var(--olive);pointer-events:none}
+  .pick-list{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;padding:44px 0;scrollbar-width:none;overscroll-behavior:contain}
+  .pick-list::-webkit-scrollbar{display:none}
+  .pick-item{height:44px;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;font-size:17px;font-weight:700;color:var(--muted);cursor:pointer;user-select:none}
+  .pick-item.on{color:var(--ink);font-size:20px}
+  .preview{display:grid;place-items:center;background:#a9c27a;border-radius:14px;height:110px;margin-bottom:14px}
+  .go{width:100%;padding:13px;font-size:16px;margin-top:4px}
+  .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
+  .toast.show{opacity:1}
+  @media (max-width:560px){.hint{display:none}.bar button{padding:9px 11px;font-size:13px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="chip">🪖➡️🙂 <b>복귀마을</b></div>
+  <div class="chip" id="dday" style="display:none"></div>
+  <div class="chip" id="online">마을 주민 <b>0</b>명</div>
+</div>
+<div class="hint">방향키 / WASD 이동 · 바닥 클릭·탭으로 이동<br>건물 앞에서 E 또는 [입장] · Enter로 채팅</div>
+
+<button class="enter" id="enterBtn">입장</button>
+<div id="log"></div>
+<div class="bar">
+  <div class="chatrow"><input id="chat" type="text" maxlength="40" placeholder="Enter 눌러 채팅" autocomplete="off"><button id="chatGo">💬</button></div>
+  <button id="saluteBtn">🫡 경례</button>
+  <button id="pledgeBtn">🏮 오늘의 다짐</button>
+  <button id="helpBtn">❓ 도움말</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- start -->
+<div class="overlay show start" id="start">
+  <div class="card"><div class="body" style="padding:24px">
+    <h1>복귀마을에 오신 걸<br>환영합니다 🫡</h1>
+    <p class="sub">막 전역해서 뭘 해야 할지 막막한 사람들이 모이는 마을이에요. 걸어 다니며 선배들의 경험을 구경하고, 내 다짐도 걸어두세요.</p>
+    <div class="preview"><canvas id="pv" width="160" height="110" style="width:160px;height:110px"></canvas></div>
+    <div class="field"><label>마을에서 쓸 이름</label><input type="text" id="nm" maxlength="8" placeholder="예) 복학생J"></div>
+    <div class="field"><label>옷 색</label><div class="swatches" id="swUni"></div></div>
+    <div class="field"><label>모자 색</label><div class="swatches" id="swCap"></div></div>
+    <div class="field"><label>내 경례 구호 <span style="font-weight:400;color:var(--muted)">(🫡 경례 버튼을 누르면 말풍선으로 나와요)</span></label><div class="picker"><div class="pick-hl"></div><div class="pick-list" id="chips"></div></div></div>
+    <div class="field"><label>전역일<span style="font-weight:400;color:var(--muted)">(선택 · 전역 후 며칠째인지 표시돼요)</span></label><input type="date" id="dis"></div>
+    <button class="primary go" id="go">마을로 들어가기</button>
+  </div></div>
+</div>
+
+<!-- modal -->
+<div class="overlay" id="modal"><div class="card" id="mcard"></div></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- world ---------- */
+const W = 1400, H = 920;
+const BUILDINGS = [
+  { id:'job', name:'취업관', emoji:'💼', x:150, y:110, w:230, h:150, wall:'#c9b48a', roof:'#4f6d8f',
+    desc:'공채·수시채용, 이력서, 면접 준비',
+    tips:[['📌','전역 직후 3개월이 가장 시간이 많은 시기 — 이력서 초안부터 써 두기'],['📌','군 경력(리더십·정비·통신 등)을 직무 언어로 바꿔 쓰는 연습이 핵심'],['📌','전직지원 프로그램·국민내일배움카드 등 혜택은 전역 전후에 신청 시기를 확인']],
+    stories:[
+      ['예시 · 선배 A','병장 전역 · 중견기업 입사','전역하고 한 달은 놀았고, 두 번째 달에 자소서 열 개를 써봤어요.','"군대에서 한 일"을 쓰지 말고 "그래서 내가 얻은 것"을 쓰라는 말이 제일 도움이 됐어요.'],
+      ['예시 · 선배 B','중소기업 → 이직 준비 중','첫 취업은 빨리 하는 게 좋지만, 첫 회사가 전부는 아니에요.','불안해서 아무 데나 넣기보다, 일단 어떤 직무가 있는지부터 구경하세요.']]},
+  { id:'cert', name:'자격증 도서관', emoji:'📚', x:580, y:90, w:240, h:160, wall:'#d8c8a0', roof:'#7a4b3a',
+    desc:'자격증·어학·공시 준비 스터디',
+    tips:[['📌','목표 직무가 없다면 컴활·한국사·토익처럼 범용 자격부터 시작'],['📌','접수 일정은 시험마다 다르니 올해 일정표를 먼저 정리'],['📌','혼자는 3주를 못 가요. 같은 시기 전역자와 스터디를 만들어 보세요']],
+    stories:[
+      ['예시 · 선배 C','공시 1년 준비 후 합격','전역 후 바로 시작했는데, 하루 루틴을 군대처럼 짜니까 오히려 편했어요.','대신 일요일은 반드시 쉬었어요. 쉬는 날이 없으면 오래 못 가요.'],
+      ['예시 · 선배 D','자격증 3개 취득','아무거나 따다가 시간만 썼어요. 목표 직무부터 정하세요.','"왜 이 자격증인지" 한 줄로 못 쓰면 일단 멈추는 게 맞았어요.']]},
+  { id:'biz', name:'창업 공방', emoji:'🛠️', x:1000, y:110, w:230, h:150, wall:'#bfa57e', roof:'#8a5a2b',
+    desc:'아이디어, 사이드 프로젝트, 작은 창업',
+    tips:[['📌','처음부터 큰 창업 말고, 작은 사이드 프로젝트로 검증해 보기'],['📌','지원사업(청년창업, 예비창업패키지)은 모집 시기가 정해져 있어요'],['📌','만든 걸 일단 공개하면 피드백이 생기고, 피드백이 동기가 돼요']],
+    stories:[
+      ['예시 · 선배 E','전역 후 소규모 온라인 판매','군대에서 알게 된 불편함이 아이템이 됐어요.','첫 달 매출 3만원. 그래도 처음으로 "내 것"이라는 느낌이 들었어요.']]},
+  { id:'trip', name:'여행사', emoji:'🧳', x:150, y:610, w:230, h:150, wall:'#d4bf94', roof:'#2f7f86',
+    desc:'여행, 워킹홀리데이, 해외 경험',
+    tips:[['📌','워킹홀리데이는 나이·신청 시기 제한이 있으니 미리 확인'],['📌','예산을 먼저 정하고, 일정은 느슨하게'],['📌','여행도 기록을 남기면 나중에 이력서와 면접의 재료가 돼요']],
+    stories:[
+      ['예시 · 선배 F','전역 직후 한 달 유럽','아무 계획 없이 갔다 왔는데, 돌아오니 하고 싶은 게 생겼어요.','쉬는 것도 계획의 일부예요. 죄책감 가지지 마세요.']]},
+  { id:'rest', name:'쉼터', emoji:'🍵', x:580, y:640, w:240, h:150, wall:'#cdbb92', roof:'#6b7f4a',
+    desc:'막막할 때, 마음 이야기',
+    tips:[['📌','"나만 뒤처진 것 같다"는 느낌은 거의 모두가 겪어요'],['📌','하루 한 가지만 해도 충분해요. 운동, 산책, 정리 중 하나'],['📌','너무 힘들면 전문 상담(청소년상담복지·정신건강복지센터 등)도 방법이에요']],
+    stories:[
+      ['예시 · 선배 G','전역 후 두 달 방황','매일 늦게 일어나고, 휴대폰만 보다 하루가 갔어요.','아침에 나가서 걷기부터 했더니 조금씩 생각이 정리됐어요.']]},
+  { id:'story', name:'군대 썰방', emoji:'🔥', x:30, y:340, w:200, h:140, wall:'#c4a679', roof:'#a14a2f',
+    desc:'군대에서 있었던 일, 웃긴 썰·힘들었던 썰 풀기',
+    cta:'썰 풀기', ph:'그때 있었던 일, 지금 돌아보니 어떤가요? (부대 이름·실명은 빼고 써 주세요)',
+    tips:[['🔒','부대 이름·위치, 훈련·작전 내용 등 군사 기밀이 될 수 있는 내용은 쓰지 마세요'],['🙅','실명이나 특정인을 알아볼 수 있는 비방은 올리지 않아요'],['😄','웃긴 썰, 힘들었던 썰, 그 경험이 지금 어떻게 남았는지 모두 환영해요']],
+    stories:[
+      ['예시 · 썰','행군 후 첫 샤워','행군이 끝나고 처음 한 샤워가 군 생활 중 가장 행복한 순간이었어요.','전역하고 힘든 일이 있으면 "그때보다는 낫다"고 생각하게 돼요.'],
+      ['예시 · 썰','내무반 라면 파티','야식 먹다가 걸릴 뻔한 이야기, 지금 생각하면 웃음만 나요.','결국 가장 기억에 남는 건 그때 같이 있던 사람들이에요.']]},
+  { id:'soon', name:'전역 준비관', emoji:'📅', x:1170, y:340, w:200, h:140, wall:'#cbb58c', roof:'#3f6b5a',
+    desc:'곧 전역하는 사람들을 위한 준비 공간',
+    cta:'전역 준비 이야기 남기기', ph:'전역까지 남은 기간, 고민, 준비 중인 것을 남겨 보세요',
+    tips:[['📌','전역 전에 하고 싶은 일을 한 줄이라도 정해 두면 막막함이 줄어요'],['📌','전직지원·교육·휴가 제도는 부대마다 안내가 달라요. 행정 담당에게 미리 확인하세요'],['📌','전역 후 3개월을 쉬기 · 준비 · 시작으로 대략 나눠 보세요'],['📌','선배 라운지에서 먼저 겪은 사람들에게 질문해 보세요']],
+    stories:[
+      ['예시 · 선배 I','전역 D-30에 한 일','D-30에 할 일 목록을 쓰고 하루 하나씩 지웠어요.','전역날 아침에 목록이 비어 있어서 조금 든든했어요.']]},
+  { id:'senior', name:'선배 라운지', emoji:'🎖️', x:1000, y:610, w:230, h:150, wall:'#c6ad82', roof:'#8c3b3b',
+    desc:'먼저 겪은 선배들의 경험 공유',
+    tips:[['📌','선배의 길이 정답은 아니에요. 어떻게 선택했는지를 보세요'],['📌','궁금한 걸 구체적으로 물어볼수록 좋은 답이 와요'],['📌','나중에 나도 후배에게 돌려주는 선순환이 이 마을의 목표예요']],
+    stories:[
+      ['예시 · 선배 H','전역 3년 차','돌아보면 그때 가장 필요했던 건 정보보다 "비슷한 사람들"이었어요.','그래서 이 마을이 필요하다고 생각해요.']]},
+];
+BUILDINGS.forEach(b => {
+  b.door = { x: b.x + b.w/2, y: b.y + b.h + 22 };
+  /* 아래 줄 건물은 광장에서 문까지 옆길로 돌아가요 */
+  b.lane = b.y > 300 ? { x: ({ trip:b.x+b.w+34, rest:b.x+b.w+34, senior:b.x-34, story:b.x+b.w+34, soon:b.x-34 })[b.id] } : null;
+});
+const PLAZA = { x: 700, y: 440 };
+const TREES = [[60,60],[1330,70],[70,860],[1320,860],[470,330],[920,330],[470,520],[930,540],[700,60],[700,860],[430,200],[980,420],[440,780],[1180,520]];
+
+/* ---------- state ---------- */
+const COLORS_UNI = ['#6b7f4a','#4f6d8f','#8c3b3b','#d9822b','#444b55','#c9a3b8'];
+const COLORS_CAP = ['#2f3a22','#2a2f3a','#d9d2bd','#c0392b','#e0b13a','#3d6f8a'];
+const me = { name:'', uni:COLORS_UNI[0], cap:COLORS_CAP[0], x:PLAZA.x, y:PLAZA.y+120, dir:1, step:0, say:'', sayT:0, speed:170 };
+let discharge = '';
+const keys = {};
+let target = null;
+let nearB = null;
+let inModal = false, started = false;
+
+/* NPC: 프로토타입용 가짜 주민 */
+const NPC_NAMES = ['취준생민수','복학생J','자격증러','예비창업가','말년휴가','전역D-3','공시생하나'];
+const NPC_SAYS = ['🫡','오늘 뭐하지…','같이 스터디할 사람?','토익 접수했다','나만 막막한 거 아니었네','선배 라운지 가볼까','일단 산책!','이력서 쓰다 왔어요'];
+const npcs = NPC_NAMES.map((n,i) => ({
+  name:n, uni:COLORS_UNI[i%6], cap:COLORS_CAP[(i*2+1)%6],
+  x:200+Math.random()*1000, y:300+Math.random()*400, dir:1, step:Math.random()*9, say:'', sayT:0, speed:60+Math.random()*30,
+  tx:null, ty:null, wait:Math.random()*3
+}));
+
+/* ---------- 실시간 접속 (서버가 없으면 예시 모드로 동작) ---------- */
+const net = { on:false, ws:null, id:0, players:new Map(), pledges:[], posts:{}, rerender:null, t:0, lx:0, ly:0,
+  send(m){ if(this.on && this.ws && this.ws.readyState===1) this.ws.send(JSON.stringify(m)); } };
+function addRemote(p){ net.players.set(p.id, { ...p, tx:p.x, ty:p.y, step:0, say:'', sayT:0 }); }
+function connect(){
+  if(!/^https?:$/.test(location.protocol)) return;
+  let ws; try{ ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host); }catch(e){ return; }
+  net.ws = ws;
+  ws.onopen = () => ws.send(JSON.stringify({ t:'join', name:me.name, uni:me.uni, cap:me.cap, x:me.x, y:me.y }));
+  ws.onmessage = e => {
+    let m; try{ m = JSON.parse(e.data); }catch(_){ return; }
+    if(m.t==='init'){ net.on=true; net.id=m.id; net.players.clear(); m.players.forEach(addRemote); net.pledges=m.pledges||[]; net.posts=m.posts||{}; toast('🌐 실시간으로 연결됐어요'); }
+    else if(m.t==='join') addRemote(m.p);
+    else if(m.t==='leave') net.players.delete(m.id);
+    else if(m.t==='move'){ const r=net.players.get(m.id); if(r){ r.tx=m.x; r.ty=m.y; r.dir=m.dir; } }
+    else if(m.t==='say'){ const r=net.players.get(m.id); if(r){ r.say=m.text; r.sayT=4.5; logChat(r.name, m.text); } }
+    else if(m.t==='pledge') net.pledges.push(m.p);
+    else if(m.t==='post'){ (net.posts[m.b] = net.posts[m.b]||[]).push(m.post); if(net.rerender) net.rerender(m.b); }
+    else if(m.t==='full') toast('마을이 가득 찼어요. 잠시 후 다시 시도해 주세요');
+  };
+  ws.onclose = () => { const was=net.on; net.on=false; net.players.clear(); if(was) toast('연결이 끊겼어요. 다시 연결 중…'); if(started) setTimeout(connect, 3000); };
+  ws.onerror = () => {};
+}
+
+/* 다짐 등불 */
+const SEED_PLEDGES = [
+  { name:'취준생민수', text:'이번 달 안에 이력서 완성', x:640, y:380 },
+  { name:'복학생J', text:'매일 30분 걷기', x:760, y:390 },
+  { name:'예비창업가', text:'작게라도 일단 만들어보기', x:700, y:350 },
+];
+let pledges = store.get('hv_pledges', []);
+const allPledges = () => net.on ? net.pledges : SEED_PLEDGES.concat(pledges);
+
+/* ---------- start screen ---------- */
+const pv = $('#pv').getContext('2d');
+function swatches(el, list, key){
+  list.forEach((c,i) => {
+    const b = document.createElement('button');
+    b.className = 'sw' + (i===0?' on':''); b.style.background = c; b.setAttribute('aria-label','색 '+(i+1));
+    b.onclick = () => { me[key] = c; [...el.children].forEach(x=>x.classList.remove('on')); b.classList.add('on'); drawPreview(); };
+    el.appendChild(b);
+  });
+}
+swatches($('#swUni'), COLORS_UNI, 'uni'); swatches($('#swCap'), COLORS_CAP, 'cap');
+function drawPreview(){ pv.clearRect(0,0,160,110); pv.save(); pv.translate(80,70); pv.scale(2.4,2.4); person(pv, me, 0, 0, false); pv.restore(); }
+drawPreview();
+
+const saved = store.get('hv_me', null);
+const SALUTES = ['충성','공격','강철','결전','단결','돌격','맹호','무적','백골','백마','북진','선봉','승진','이기자','유격','전격','전진','진격','진군','충일','철풍','청성','태권','태풍','특공','필승','화랑'];
+me.salute = SALUTES.includes(saved && saved.salute) ? saved.salute : SALUTES[0];
+/* 스크롤로 구호 고르기: 가운데 칸에 멈춘 항목이 선택돼요 */
+const PICK_H = 44, pickList = $('#chips');
+SALUTES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'pick-item'; d.textContent = s;
+  d.onclick = () => pickList.scrollTo({ top: i*PICK_H, behavior:'smooth' });
+  pickList.appendChild(d);
+});
+function syncPick(){
+  const i = Math.max(0, Math.min(SALUTES.length-1, Math.round(pickList.scrollTop/PICK_H)));
+  me.salute = SALUTES[i];
+  [...pickList.children].forEach((x,j) => x.classList.toggle('on', j===i));
+}
+pickList.addEventListener('scroll', syncPick);
+pickList.scrollTop = SALUTES.indexOf(me.salute)*PICK_H; syncPick();
+if (saved){ $('#nm').value = saved.name||''; if(saved.dis) $('#dis').value = saved.dis; }
+
+$('#go').onclick = () => {
+  me.name = ($('#nm').value.trim() || '새내기').slice(0,8);
+  discharge = $('#dis').value;
+  store.set('hv_me', { name: me.name, dis: discharge, salute: me.salute });
+  $('#start').classList.remove('show'); started = true; connect();
+  if (discharge){
+    const d = Math.floor((Date.now() - new Date(discharge+'T00:00:00')) / 86400000);
+    $('#dday').style.display = ''; $('#dday').innerHTML = d >= 0 ? '전역 <b>D+'+(d+1)+'</b>' : '전역 <b>D'+d+'</b>';
+  }
+  toast('걸어 다니며 건물에 들어가 보세요!');
+};
+
+/* ---------- canvas ---------- */
+const cv = $('#c'), ctx = cv.getContext('2d');
+let vw = 0, vh = 0, dpr = 1, zoom = 1;
+function resize(){
+  dpr = Math.min(window.devicePixelRatio||1, 2); vw = innerWidth; vh = innerHeight;
+  cv.width = vw*dpr; cv.height = vh*dpr;
+  zoom = Math.max(0.7, Math.min(1.25, Math.min(vw/900, vh/620)));
+}
+addEventListener('resize', resize); resize();
+const cam = { x: me.x, y: me.y };
+
+/* ---------- drawing ---------- */
+function rr(c, x, y, w, h, r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function person(c, p, x, y, label=true){
+  const bob = Math.sin(p.step)*1.6, leg = Math.sin(p.step)*3;
+  c.fillStyle='rgba(0,0,0,.22)'; c.beginPath(); c.ellipse(x,y+10,9,3.5,0,0,7); c.fill();
+  c.fillStyle='#3b3f46'; c.fillRect(x-4,y+3,3.2,8+leg*.4); c.fillRect(x+0.8,y+3,3.2,8-leg*.4);
+  c.fillStyle=p.uni; rr(c,x-6.5,y-9+bob,13,13,3); c.fill();
+  c.fillStyle='#f0c9a0'; c.beginPath(); c.arc(x,y-14+bob,6,0,7); c.fill();
+  c.fillStyle=p.cap; c.beginPath(); c.arc(x,y-15.5+bob,6.2,Math.PI,0); c.fill();
+  c.fillRect(x+(p.dir>0?1:-9),y-15.5+bob,8,2);
+  c.fillStyle='#222'; c.fillRect(x+(p.dir>0?1.5:-3.5),y-13.5+bob,2,2);
+  if(label && p.name){
+    c.font='600 11px "Malgun Gothic",sans-serif'; c.textAlign='center';
+    const w = c.measureText(p.name).width+10;
+    c.fillStyle='rgba(30,34,24,.72)'; rr(c,x-w/2,y-34+bob,w,15,7); c.fill();
+    c.fillStyle='#fff'; c.fillText(p.name,x,y-23+bob);
+  }
+}
+function bubble(c, text, x, y){
+  c.font='600 12px "Malgun Gothic",sans-serif'; c.textAlign='center';
+  const chars = [...text], lines = [];
+  for(let i=0;i<chars.length;i+=16) lines.push(chars.slice(i,i+16).join(''));
+  const w = Math.max(...lines.map(l=>c.measureText(l).width))+16, h = lines.length*16+8, top = y-34-h;
+  c.fillStyle='#fff'; rr(c,x-w/2,top,w,h,9); c.fill();
+  c.beginPath(); c.moveTo(x-4,y-34); c.lineTo(x+4,y-34); c.lineTo(x,y-28); c.fill();
+  c.fillStyle='#2a2f24'; lines.forEach((l,i)=>c.fillText(l,x,top+17+i*16));
+}
+function tree(c,x,y){
+  c.fillStyle='rgba(0,0,0,.18)'; c.beginPath(); c.ellipse(x,y+4,20,7,0,0,7); c.fill();
+  c.fillStyle='#6b4a2e'; c.fillRect(x-4,y-22,8,26);
+  c.fillStyle='#4f7a3a'; c.beginPath(); c.arc(x,y-38,24,0,7); c.fill();
+  c.fillStyle='#5f8f47'; c.beginPath(); c.arc(x-8,y-44,14,0,7); c.fill();
+}
+function building(c,b,near){
+  c.fillStyle='rgba(0,0,0,.2)'; c.fillRect(b.x+8,b.y+b.h-6,b.w,14);
+  c.fillStyle=b.wall; c.fillRect(b.x,b.y+34,b.w,b.h-34);
+  c.fillStyle=b.roof; c.beginPath(); c.moveTo(b.x-12,b.y+40); c.lineTo(b.x+22,b.y); c.lineTo(b.x+b.w-22,b.y); c.lineTo(b.x+b.w+12,b.y+40); c.closePath(); c.fill();
+  c.fillStyle='rgba(0,0,0,.14)'; c.fillRect(b.x-12,b.y+36,b.w+24,6);
+  c.fillStyle='#fbf6e4';
+  for(let i=0;i<3;i++){ const wx = b.x+18+i*((b.w-36)/3); if(Math.abs(wx+ (b.w-36)/6 - (b.x+b.w/2))<16) continue; rr(c,wx+4,b.y+62,32,28,3); c.fill(); c.strokeStyle='#8a7a55'; c.lineWidth=2; c.stroke(); }
+  c.fillStyle='#5a3d28'; rr(c,b.x+b.w/2-17,b.y+b.h-50,34,50,4); c.fill();
+  c.fillStyle='#e7c46a'; c.beginPath(); c.arc(b.x+b.w/2+9,b.y+b.h-24,2.5,0,7); c.fill();
+  /* sign */
+  const sw = 150, sx = b.x+b.w/2-sw/2, sy = b.y-18;
+  c.fillStyle = near ? '#d9822b' : '#3a3f2e'; rr(c,sx,sy,sw,32,9); c.fill();
+  c.fillStyle='#fff'; c.font='700 14px "Malgun Gothic",sans-serif'; c.textAlign='center';
+  c.fillText(b.emoji+' '+b.name, b.x+b.w/2, sy+21);
+  if(near){ c.strokeStyle='rgba(255,255,255,.7)'; c.lineWidth=3; c.setLineDash([6,6]); c.beginPath(); c.arc(b.door.x,b.door.y,34,0,7); c.stroke(); c.setLineDash([]); }
+}
+function lantern(c,l,t,i){
+  const sway = Math.sin(t*1.6+i)*2;
+  c.strokeStyle='#6b5a3a'; c.lineWidth=1.5; c.beginPath(); c.moveTo(l.x,l.y-40); c.lineTo(l.x+sway,l.y-18); c.stroke();
+  const g = c.createRadialGradient(l.x+sway,l.y-8,2,l.x+sway,l.y-8,30);
+  g.addColorStop(0,'rgba(255,200,90,.55)'); g.addColorStop(1,'rgba(255,200,90,0)');
+  c.fillStyle=g; c.beginPath(); c.arc(l.x+sway,l.y-8,30,0,7); c.fill();
+  c.fillStyle='#e0572f'; rr(c,l.x+sway-8,l.y-20,16,20,6); c.fill();
+  c.fillStyle='#ffd37a'; c.fillRect(l.x+sway-3,l.y-14,6,8);
+}
+function ground(c){
+  c.fillStyle='#8fb464'; c.fillRect(0,0,W,H);
+  c.fillStyle='rgba(255,255,255,.05)';
+  for(let y=0;y<H;y+=40) for(let x=((y/40)%2)*40;x<W;x+=80) c.fillRect(x,y,40,40);
+  /* paths */
+  c.fillStyle='#e3d4a8';
+  BUILDINGS.forEach(b => {
+    if(b.lane){
+      rr(c,b.lane.x-22,PLAZA.y-6,44,b.door.y-PLAZA.y+28,10); c.fill();
+      const x0 = Math.min(b.lane.x,b.door.x)-22, x1 = Math.max(b.lane.x,b.door.x)+22;
+      rr(c,x0,b.door.y-22,x1-x0,44,10); c.fill();
+    } else { rr(c,b.door.x-22,Math.min(b.door.y,PLAZA.y)-6,44,Math.abs(b.door.y-PLAZA.y)+12,10); c.fill(); }
+  });
+  c.fillRect(0,0,0,0);
+  [[160,PLAZA.y-22,W-320,44]].forEach(r=>{ rr(c,r[0],r[1],r[2],r[3],14); c.fill(); });
+  c.beginPath(); c.ellipse(PLAZA.x,PLAZA.y,150,110,0,0,7); c.fill();
+  c.strokeStyle='#cdbb8c'; c.lineWidth=4; c.stroke();
+  /* flag pole */
+  c.fillStyle='#6b6b60'; c.fillRect(PLAZA.x-3,PLAZA.y-95,6,95);
+  c.fillStyle='#d9822b'; c.beginPath(); c.moveTo(PLAZA.x+3,PLAZA.y-92); c.lineTo(PLAZA.x+46,PLAZA.y-80); c.lineTo(PLAZA.x+3,PLAZA.y-66); c.fill();
+  c.fillStyle='#fff'; c.font='700 11px "Malgun Gothic",sans-serif'; c.textAlign='center';
+  c.fillText('복귀마을 광장', PLAZA.x, PLAZA.y+22);
+}
+
+/* ---------- logic ---------- */
+function blocked(x,y){
+  if(x<14||y<30||x>W-14||y>H-12) return true;
+  for(const b of BUILDINGS){ if(x>b.x-8 && x<b.x+b.w+8 && y>b.y+30 && y<b.y+b.h+2) return true; }
+  for(const t of TREES){ if(Math.hypot(x-t[0],y-t[1])<14) return true; }
+  return false;
+}
+function move(p,dx,dy){
+  if(!dx&&!dy) return false;
+  const nx = p.x+dx, ny = p.y+dy; let m=false;
+  if(!blocked(nx,p.y)){ p.x=nx; m=true; }
+  if(!blocked(p.x,ny)){ p.y=ny; m=true; }
+  if(dx) p.dir = dx>0?1:-1;
+  if(m) p.step += 0.22;
+  return m;
+}
+function say(p, text, ms=2600){ p.say=text; p.sayT=ms/1000; }
+
+function update(dt){
+  let dx=0, dy=0;
+  if(keys.ArrowLeft||keys.a) dx-=1; if(keys.ArrowRight||keys.d) dx+=1;
+  if(keys.ArrowUp||keys.w) dy-=1; if(keys.ArrowDown||keys.s) dy+=1;
+  if(dx||dy){ target=null; const l=Math.hypot(dx,dy); move(me, dx/l*me.speed*dt, dy/l*me.speed*dt); }
+  else if(target){
+    const tx=target.x-me.x, ty=target.y-me.y, d=Math.hypot(tx,ty);
+    if(d<5) target=null; else if(!move(me, tx/d*me.speed*dt, ty/d*me.speed*dt)) target=null;
+  }
+  if(me.sayT>0) me.sayT-=dt;
+
+  /* 다른 접속자: 서버에서 받은 위치로 부드럽게 따라가요 */
+  net.players.forEach(r => {
+    const rx=r.tx-r.x, ry=r.ty-r.y, d=Math.hypot(rx,ry), k=Math.min(1,dt*10);
+    if(d>1){ r.x+=rx*k; r.y+=ry*k; r.step+=dt*11; }
+    if(r.sayT>0) r.sayT-=dt;
+  });
+  net.t += dt;
+  if(net.t>.1){ net.t=0; if(Math.abs(me.x-net.lx)>.5||Math.abs(me.y-net.ly)>.5){ net.lx=me.x; net.ly=me.y; net.send({t:'move',x:Math.round(me.x),y:Math.round(me.y),dir:me.dir}); } }
+
+  (net.on ? [] : npcs).forEach(n => {
+    if(n.sayT>0) n.sayT-=dt;
+    if(n.tx==null){
+      n.wait-=dt;
+      if(n.wait<=0){
+        const pts = Math.random()<.6 ? BUILDINGS.map(b=>b.lane ? { x:b.lane.x, y:b.door.y } : b.door) : [PLAZA];
+        const p = pts[Math.floor(Math.random()*pts.length)];
+        n.tx = p.x+(Math.random()-.5)*80; n.ty = p.y+(Math.random()-.5)*50;
+        if(Math.random()<.4) say(n, NPC_SAYS[Math.floor(Math.random()*NPC_SAYS.length)], 3000);
+      }
+    } else {
+      const tx=n.tx-n.x, ty=n.ty-n.y, d=Math.hypot(tx,ty);
+      if(d<8){ n.tx=null; n.wait=2+Math.random()*5; }
+      else if(!move(n, tx/d*n.speed*dt, ty/d*n.speed*dt)){
+        /* 막히면 광장 쪽으로 우회 */
+        n.tx=null; n.wait=.5; n.x += (PLAZA.x-n.x)*.02; n.y += (PLAZA.y-n.y)*.02;
+      }
+    }
+  });
+
+  nearB = null;
+  for(const b of BUILDINGS){ if(Math.hypot(me.x-b.door.x, me.y-b.door.y)<52){ nearB=b; break; } }
+  $('#enterBtn').classList.toggle('show', !!nearB && !inModal && started);
+  if(nearB) $('#enterBtn').textContent = nearB.emoji+' '+nearB.name+' 입장';
+
+  cam.x += (me.x-cam.x)*Math.min(1,dt*6); cam.y += (me.y-cam.y)*Math.min(1,dt*6);
+  $('#online').innerHTML = net.on ? '🟢 접속 중 <b>'+(net.players.size+1)+'</b>명'
+    : '마을 주민 <b>'+(npcs.length+1)+'</b>명 <span style="font-weight:400;color:var(--muted)">(예시 · 오프라인)</span>';
+}
+
+function render(t){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#2b3326'; ctx.fillRect(0,0,vw,vh);
+  const z = zoom;
+  const cx = Math.max(vw/2/z, Math.min(W-vw/2/z, cam.x)), cy = Math.max(vh/2/z, Math.min(H-vh/2/z, cam.y));
+  const ox = vw/2 - cx*z, oy = vh/2 - cy*z;
+  ctx.setTransform(dpr*z,0,0,dpr*z,dpr*ox,dpr*oy);
+  ground(ctx);
+  const items = [];
+  BUILDINGS.forEach(b => items.push({y:b.y+b.h, f:()=>building(ctx,b,b===nearB)}));
+  TREES.forEach(tr => items.push({y:tr[1], f:()=>tree(ctx,tr[0],tr[1])}));
+  allPledges().forEach((l,i) => items.push({y:l.y, f:()=>lantern(ctx,l,t,i)}));
+  (net.on ? [...net.players.values()] : npcs).forEach(n => items.push({y:n.y, f:()=>{ person(ctx,n,n.x,n.y); if(n.sayT>0) bubble(ctx,n.say,n.x,n.y-6); }}));
+  items.push({y:me.y, f:()=>{ person(ctx,me,me.x,me.y);
+    ctx.strokeStyle='#d9822b'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(me.x,me.y+10,13,5,0,0,7); ctx.stroke();
+    if(me.sayT>0) bubble(ctx,me.say,me.x,me.y-6); }});
+  items.sort((a,b)=>a.y-b.y).forEach(i=>i.f());
+  /* 가까운 등불의 다짐 말풍선 */
+  /* 겹쳐 있어도 가장 가까운 등불 하나만 보여줘요 */
+  let near = null, nd = 70;
+  allPledges().forEach(l => { const d = Math.hypot(me.x-l.x,me.y-l.y); if(d<nd){ nd=d; near=l; } });
+  if(near) bubble(ctx,'🏮 '+near.name+': '+near.text,near.x,near.y-30);
+  /* click target marker */
+  if(target){ ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(target.x,target.y,8+Math.sin(t*8)*2,0,7); ctx.stroke(); }
+  /* 지붕 위 안개/비네트 */
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const vg = ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.45,vw/2,vh/2,Math.max(vw,vh)*.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(20,26,14,.35)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,vw,vh);
+  cv._view = { ox, oy, z };
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(.05,(now-last)/1000); last=now;
+  if(started && !inModal) update(dt); else { /* 시작 전에도 NPC는 움직이게 */ if(!inModal || true) { const keep = target; target=null; update(dt); target=keep; } }
+  render(now/1000); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- input ---------- */
+addEventListener('keydown', e => {
+  if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){ if(e.key==='Escape') closeModal(); return; }
+  const k = e.key.length===1 ? e.key.toLowerCase() : e.key; keys[k]=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if(!started) return;
+  if(e.key==='Escape') closeModal();
+  if(k==='e' && nearB && !inModal) openBuilding(nearB);
+  if(e.key==='Enter' && !inModal){ e.preventDefault(); $('#chat').focus(); }
+  if(k==='f') salute();
+});
+addEventListener('keyup', e => { const k = e.key.length===1 ? e.key.toLowerCase() : e.key; keys[k]=false; });
+cv.addEventListener('pointerdown', e => {
+  if(!started||inModal) return;
+  const v = cv._view; target = { x:(e.clientX - v.ox)/v.z, y:(e.clientY - v.oy)/v.z };
+});
+
+/* ---------- UI actions ---------- */
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+function salute(){
+  const cry = '🫡 '+me.salute+'!'; say(me,cry,2500); net.send({t:'say',text:cry});
+  npcs.forEach(n => { if(Math.hypot(n.x-me.x,n.y-me.y)<140) say(n, Math.random()<.5?'🫡 반가워요!':'나도 전역했어요 ㅎㅎ', 2400); });
+}
+/* ---------- 채팅: 머리 위 말풍선 + 최근 대화 ---------- */
+function logChat(name, text, mine){
+  const log = $('#log'), d = document.createElement('div');
+  d.innerHTML = '<b>'+esc(name)+'</b> '+esc(text); if(mine) d.className='me';
+  log.appendChild(d); while(log.children.length>6) log.firstChild.remove();
+  setTimeout(()=>d.remove(), 20000);
+}
+function chatSend(){
+  const inp = $('#chat'), v = inp.value.trim().slice(0,40); inp.value='';
+  if(!v || !started) return;
+  say(me, v, 4500); logChat(me.name, v, true); net.send({ t:'say', text:v });
+  if(!net.on) logChat('안내', '지금은 오프라인이라 나에게만 보여요');
+}
+$('#chat').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); chatSend(); e.target.blur(); }
+  else if(e.key==='Escape'){ e.target.blur(); }
+});
+$('#chatGo').onclick = chatSend;
+$('#saluteBtn').onclick = salute;
+$('#enterBtn').onclick = () => nearB && openBuilding(nearB);
+$('#helpBtn').onclick = () => openCard(`
+  <header><div class="ico" style="background:var(--paper2)">❓</div><div><h2>이용 방법</h2><p>복귀마을 프로토타입</p></div><button class="x" onclick="window.__close()">×</button></header>
+  <div class="body">
+    <div class="tip"><i>🚶</i><span>방향키·WASD로 이동하거나, 바닥을 클릭/탭하면 그곳으로 걸어가요.</span></div>
+    <div class="tip"><i>🏠</i><span>건물 입구에 가까이 가면 <b>입장</b> 버튼(또는 E)이 나타나요.</span></div>
+    <div class="tip"><i>🫡</i><span>경례(F)로 근처 주민에게 인사해요.</span></div>
+    <div class="tip"><i>🏮</i><span>오늘의 다짐을 적으면 광장에 내 등불이 걸려요. 등불 가까이 가면 내용이 보여요.</span></div>
+    <p class="note">※ 주민(NPC)과 선배 경험담은 모두 예시입니다. 내가 쓴 글은 이 브라우저에만 저장돼요.</p>
+  </div>`);
+$('#pledgeBtn').onclick = () => openCard(`
+  <header><div class="ico" style="background:#fbe3cf">🏮</div><div><h2>오늘의 다짐</h2><p>광장에 내 등불을 걸어요</p></div><button class="x" onclick="window.__close()">×</button></header>
+  <div class="body">
+    <input type="text" id="pl" maxlength="30" placeholder="예) 오늘은 이력서 한 장 쓰기">
+    <div class="row"><button class="primary" id="plGo">등불 걸기</button></div>
+    <p class="note">짧을수록 좋아요 (30자). 걸린 등불은 광장 근처에서 볼 수 있어요.</p>
+  </div>`, () => {
+    $('#plGo').onclick = () => {
+      const v = $('#pl').value.trim(); if(!v) return;
+      const a = Math.random()*6.28, r = 40+Math.random()*90;
+      const px = PLAZA.x+Math.cos(a)*r*1.3, py = PLAZA.y+Math.sin(a)*r*.8+30;
+      if(net.on) net.send({ t:'pledge', text:v, x:Math.round(px), y:Math.round(py) });
+      else { pledges.push({ name: me.name, text: v, x:px, y:py }); store.set('hv_pledges', pledges.slice(-30)); }
+      closeModal(); toast('🏮 광장에 등불이 걸렸어요'); say(me,'🏮 '+v.slice(0,14),3000); net.send({t:'say',text:'🏮 '+v.slice(0,14)});
+    };
+    setTimeout(()=>$('#pl').focus(),50);
+  });
+
+/* ---------- modal ---------- */
+function openCard(html, after){ inModal=true; $('#mcard').innerHTML=html; $('#modal').classList.add('show'); after && after(); }
+function closeModal(){ inModal=false; $('#modal').classList.remove('show'); }
+window.__close = closeModal;
+$('#modal').addEventListener('pointerdown', e => { if(e.target.id==='modal') closeModal(); });
+
+function openBuilding(b){
+  const key = 'hv_posts_'+b.id;
+  const render = () => {
+    const mine = net.on ? (net.posts[b.id]||[]) : store.get(key, []);
+    const stories = b.stories.map(s => `<div class="story"><div class="who"><span class="tag">${esc(s[0])}</span>${esc(s[1])}</div><h4>${esc(s[2])}</h4><p>${esc(s[3])}</p></div>`).join('');
+    const posts = mine.map(p => `<div class="story mine"><div class="who"><span class="tag">내 글</span>${esc(p.name)} · ${esc(p.date)}</div><p>${esc(p.text).replace(/\n/g,'<br>')}</p></div>`).join('');
+    $('#mcard').innerHTML = `
+      <header><div class="ico" style="background:${b.roof};color:#fff">${b.emoji}</div><div><h2>${esc(b.name)}</h2><p>${esc(b.desc)}</p></div><button class="x" onclick="window.__close()">×</button></header>
+      <div class="body">
+        <h3>알아두면 좋은 것</h3>
+        ${b.tips.map(t=>`<div class="tip"><i>${t[0]}</i><span>${esc(t[1])}</span></div>`).join('')}
+        <h3>선배들의 이야기</h3>
+        ${stories}
+        ${posts ? '<h3>마을 사람들의 글</h3>'+posts : ''}
+        <h3>${esc(b.cta || '나도 한마디 남기기')}</h3>
+        <textarea id="pt" maxlength="300" placeholder="${esc(b.ph || '이 분야에서 내가 해본 것, 궁금한 것, 도움이 된 정보를 남겨 주세요')}"></textarea>
+        <div class="row"><button class="primary" id="ptGo">남기기</button></div>
+        <p class="note">※ 위 선배 이야기는 예시입니다. ${net.on ? '남긴 글은 접속한 모두에게 보여요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
+      </div>`;
+    $('#ptGo').onclick = () => {
+      const v = $('#pt').value.trim(); if(!v) return;
+      if(net.on){ net.send({ t:'post', b:b.id, text:v }); $('#pt').value=''; return; } /* 서버가 돌려주면 화면에 나타나요 */
+      const arr = store.get(key, []); arr.push({ name: me.name, text: v, date: new Date().toLocaleDateString('ko-KR') });
+      store.set(key, arr); render();
+      $('#mcard').scrollTo({ top: 99999, behavior:'smooth' });
+    };
+  };
+  net.rerender = id => { if(inModal && id===b.id){ const d=$('#pt') ? $('#pt').value : ''; render(); $('#pt').value=d; $('#mcard').scrollTo({ top: 99999, behavior:'smooth' }); } };
+  inModal = true; $('#modal').classList.add('show'); render();
+}
+})();
+</script>
+</body>
+</html>

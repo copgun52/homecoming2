@@ -1,0 +1,19 @@
+name: Deploy to Fly.io
+
+# main 브랜치에 코드가 올라올 때마다 자동으로 배포해요.
+on:
+  push:
+    branches: [main]
+
+concurrency: deploy-group   # 배포가 겹치지 않게 한 번에 하나씩
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # 디스크가 붙은 서버 1대만 운영하므로 --ha=false
+      - run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,9 @@
+{
+  "name": "homecoming-village",
+  "version": "0.1.0",
+  "private": true,
+  "description": "전역자 커뮤니티 복귀마을 실시간 서버",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

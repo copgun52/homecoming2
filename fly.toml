@@ -1,0 +1,38 @@
+# app 이름은 Fly 전체에서 유일해야 해요. `fly apps create 원하는이름` 으로 만든 이름으로 바꿔 주세요.
+app = "homecoming-village"
+primary_region = "nrt"   # 도쿄 (한국에서 가장 가까운 지역 중 하나)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/data"
+
+# 기록(data.json)이 저장되는 디스크. 재배포해도 지워지지 않아요.
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"     # 접속이 없어도 서버를 끄지 않아요
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 100
+    hard_limit = 120
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
