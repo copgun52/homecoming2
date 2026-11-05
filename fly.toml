@@ -1,5 +1,5 @@
 # app 이름은 Fly 전체에서 유일해야 해요. `fly apps create 원하는이름` 으로 만든 이름으로 바꿔 주세요.
-app = "homecoming-village"
+app = "homecoming1020"
 primary_region = "nrt"   # 도쿄 (한국에서 가장 가까운 지역 중 하나)
 
 [build]
