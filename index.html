@@ -4,6 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>복귀마을 — 전역 후 첫걸음</title>
+<meta name="description" content="막 전역해서 뭘 해야 할지 막막한 사람들이 모이는 온라인 마을. 아바타로 걸어 다니며 정보와 경험을 나누고 서로를 응원해요.">
+<meta name="theme-color" content="#5d6b3a">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="복귀마을">
+<meta property="og:title" content="복귀마을 — 전역 후 첫걸음">
+<meta property="og:description" content="막 전역해서 막막한 사람들이 모이는 마을. 걸어 다니며 정보와 경험을 나누고, 오늘의 다짐을 걸어 보세요.">
+<meta property="og:url" content="__BASE__/">
+<meta property="og:image" content="__BASE__/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="복귀마을 — 전역 후 첫걸음">
+<meta name="twitter:image" content="__BASE__/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
@@ -76,6 +90,12 @@
   .cmtForm{display:flex;gap:6px;margin-top:6px}
   .cmtForm input{flex:1;min-width:0;padding:8px 10px;font-size:13.5px}
   .cmtGo{background:var(--olive);color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:700;font-size:13px}
+  .rep{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted);margin-left:auto}
+  .rep:hover:not([disabled]){border-color:#e0572f;color:#b23a18}
+  .rep[disabled]{cursor:default;opacity:.7}
+  .cmt .rep{padding:1px 7px;font-size:11px;margin-left:6px}
+  .rules{margin:12px 0 4px;padding:10px 12px;background:#fff7ec;border:1px dashed var(--accent);border-radius:12px;font-size:12.5px;line-height:1.55;color:#5a4a30}
+  .rules ul{margin:4px 0 0;padding-left:18px}
   .like{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700;color:var(--ink)}
   .like:hover:not([disabled]){border-color:#e0572f}
   .like.on{background:#fde7df;border-color:#e0572f;color:#b23a18;cursor:default}
@@ -105,7 +125,16 @@
   .go{width:100%;padding:13px;font-size:16px;margin-top:4px}
   .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
   .toast.show{opacity:1}
-  @media (max-width:560px){.hint{display:none}.bar button{padding:9px 11px;font-size:13px}}
+  .emo{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;display:none;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 8px;box-shadow:0 3px 0 var(--line),0 8px 18px rgba(0,0,0,.28);z-index:7}
+  .emo.show{display:flex}
+  .emo button{background:none;border:0;font-size:26px;padding:2px 6px;border-radius:10px;line-height:1.2}
+  .emo button:active{background:var(--paper2)}
+  @media (max-width:560px){
+    .hint{display:none}.bar button{padding:9px 11px;font-size:13px}
+    .enter{bottom:150px}.emo{bottom:150px}#log{bottom:150px}
+    .card header{padding:16px 16px 12px}.body{padding:14px 16px 18px}
+  }
+  @media (max-height:780px){.preview{height:84px}.start .sub{font-size:13px;margin-bottom:10px}}
 </style>
 </head>
 <body>
@@ -124,9 +153,11 @@
 <div class="bar">
   <div class="chatrow"><input id="chat" type="text" maxlength="40" placeholder="Enter 눌러 채팅" autocomplete="off"><button id="chatGo">💬</button></div>
   <button id="saluteBtn">🫡 경례</button>
+  <button id="emoBtn" title="감정 표현">😄 표정</button>
   <button id="pledgeBtn">🏮 오늘의 다짐</button>
   <button id="helpBtn">❓ 도움말</button>
 </div>
+<div class="emo" id="emo"><button data-i="0">😄</button><button data-i="1">👏</button><button data-i="2">💪</button><button data-i="3">😭</button><button data-i="4">🫡</button></div>
 <div class="toast" id="toast"></div>
 
 <!-- start -->
@@ -294,6 +325,12 @@ function connect(){
     else if(m.t==='post'){ (net.posts[m.b] = net.posts[m.b]||[]).push(m.post); if(net.rerender) net.rerender(m.b); }
     else if(m.t==='comment'){ const p=(net.posts[m.b]||[]).find(x=>x.id===m.id); if(p){ (p.comments=p.comments||[]).push(m.c); p.cn=m.cn; if(net.rerender) net.rerender(m.b); } }
     else if(m.t==='like'){ const p=(net.posts[m.b]||[]).find(x=>x.id===m.id); if(p){ p.likes=m.n; if(m.you) p.liked=true; if(net.rerender) net.rerender(m.b); } }
+    else if(m.t==='del'){   /* 운영자가 지웠거나 신고가 모여 가려진 글·댓글 */
+      const arr=net.posts[m.b]||[], i=arr.findIndex(x=>x.id===m.id);
+      if(i>=0){ if(m.cid){ const p=arr[i]; p.comments=(p.comments||[]).filter(c=>c.id!==m.cid); p.cn=Math.max(0,(p.cn||1)-1); } else arr.splice(i,1); if(net.rerender) net.rerender(m.b); } }
+    else if(m.t==='delpledge'){ const i=net.pledges.findIndex(p=>p.text===m.text&&p.x===m.x&&p.y===m.y); if(i>=0) net.pledges.splice(i,1); }
+    else if(m.t==='reported') toast('🚩 신고했어요. 여러 명이 신고하면 글이 가려지고 운영자가 확인해요');
+    else if(m.t==='limit') toast(({post:'글을 너무 자주 남겼어요. 잠시 후에 다시 해 주세요',comment:'댓글을 너무 자주 남겼어요. 잠시 후에 다시 해 주세요',like:'좋아요를 더 누를 수 없어요',report:'신고를 너무 많이 했어요. 잠시 후에 다시 해 주세요',pledge:'다짐을 너무 자주 걸었어요. 잠시 후에 다시 해 주세요'})[m.k] || '잠시 후에 다시 해 주세요');
     else if(m.t==='full') toast('마을이 가득 찼어요. 잠시 후 다시 시도해 주세요');
   };
   ws.onclose = () => {
@@ -1100,6 +1137,10 @@ $('#chat').addEventListener('keydown', e => {
 });
 $('#chatGo').onclick = chatSend;
 $('#saluteBtn').onclick = salute;
+/* 폰에는 숫자 키가 없어서, 표정 버튼으로 감정 표현을 골라요 */
+$('#emoBtn').onclick = e => { e.stopPropagation(); $('#emo').classList.toggle('show'); };
+$('#emo').querySelectorAll('button').forEach(btn => { btn.onclick = () => { emote(Number(btn.dataset.i)); $('#emo').classList.remove('show'); }; });
+document.addEventListener('pointerdown', e => { if(!e.target.closest('#emo') && !e.target.closest('#emoBtn')) $('#emo').classList.remove('show'); });
 /* 시간대: 자동(내 컴퓨터 시계) → 낮 → 노을 → 밤 */
 $('#todBtn').textContent = TOD_LABEL[todMode] || TOD_LABEL.auto;
 $('#todBtn').onclick = () => {
@@ -1175,17 +1216,20 @@ function sortPosts(posts){
 
 function openBuilding(b){
   const open = new Set(), drafts = {};   // 펼친 댓글창, 쓰던 댓글(다시 그려도 유지)
+  const reported = () => new Set(store.get('hv_reported', []));
+  const repBtn = (id, cid) => { if(!net.on) return ''; const k = b.id+':'+id+(cid?':'+cid:''), done = reported().has(k);
+    return `<button class="rep" data-id="${esc(id)}" ${cid?`data-cid="${esc(cid)}" `:''}${done?'disabled':''} title="부적절한 글이면 신고해 주세요">${done?'🚩 신고함':'🚩'}</button>`; };
   const postHtml = (p, hot) => {
     const list = p.comments || [], n = p.cn != null ? p.cn : list.length, isOpen = open.has(String(p.id));
     const panel = isOpen ? `<div class="cmts">
         ${n > list.length ? `<div class="cmtMore">이전 댓글 ${n-list.length}개는 생략돼요</div>` : ''}
-        ${list.map(c => `<div class="cmt"><b>${esc(c.name)}</b>${esc(c.text)}<span>${esc(c.date)}</span></div>`).join('')}
+        ${list.map(c => `<div class="cmt"><b>${esc(c.name)}</b>${esc(c.text)}<span>${esc(c.date)}</span>${c.id ? repBtn(p.id, c.id) : ''}</div>`).join('')}
         <div class="cmtForm"><input class="cmtIn" type="text" data-id="${esc(p.id)}" maxlength="150" placeholder="댓글을 남겨 보세요" autocomplete="off"><button class="cmtGo" data-id="${esc(p.id)}">등록</button></div>
       </div>` : '';
     return `<div class="story${hot?' hot':''}">
       <div class="who">${hot?'<span class="tag hotTag">🔥 인기글</span>':''}<span>${esc(p.name)}</span><span>· ${esc(p.date)}</span></div>
       <p>${esc(p.text).replace(/\n/g,'<br>')}</p>
-      <div class="likeRow"><button class="like${p.liked?' on':''}" data-id="${esc(p.id)}" ${p.liked?'disabled':''}>${p.liked?'❤️':'🤍'} ${p.likes||0}</button><button class="cmtToggle" data-id="${esc(p.id)}">💬 댓글 ${n}</button></div>
+      <div class="likeRow"><button class="like${p.liked?' on':''}" data-id="${esc(p.id)}" ${p.liked?'disabled':''}>${p.liked?'❤️':'🤍'} ${p.likes||0}</button><button class="cmtToggle" data-id="${esc(p.id)}">💬 댓글 ${n}</button>${repBtn(p.id)}</div>
       ${panel}
     </div>`;
   };
@@ -1206,6 +1250,11 @@ function openBuilding(b){
         <textarea id="pt" maxlength="300" placeholder="${esc(b.ph || '이 분야에서 내가 해본 것, 궁금한 것, 도움이 된 정보를 남겨 주세요')}"></textarea>
         <div class="row"><button class="primary" id="ptGo">남기기</button></div>
         <p class="note">${b.notice ? '🔒 '+esc(b.notice)+'<br>' : ''}${net.on ? '남긴 글은 접속한 모두에게 보여요. 좋아요는 글마다 한 번만 누를 수 있어요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
+        <div class="rules"><b>🙏 함께 지켜 주세요</b><ul>
+          <li>부대 이름·위치, 훈련·장비 정보 같은 <b>군사 기밀</b>은 쓰지 마세요.</li>
+          <li>실명, 전화번호, 계정 등 <b>개인정보</b>는 올리지 마세요. 로그인이 없어서 한번 올린 글은 모두가 볼 수 있어요.</li>
+          <li>특정인을 향한 욕설·비방, 광고는 안 돼요. 부적절한 글은 🚩로 신고해 주세요.</li>
+        </ul></div>
         ${rest.length ? '<h3>모든 글 (최신순)</h3>'+rest.map(p => postHtml(p, false)).join('') : ''}
       </div>`;
     $('#ptGo').onclick = () => {
@@ -1219,6 +1268,12 @@ function openBuilding(b){
     card.querySelectorAll('.like:not([disabled])').forEach(btn => { btn.onclick = () => { likePost(b, btn.dataset.id); if(!net.on) rerender(); }; });
     card.querySelectorAll('.cmtToggle').forEach(btn => { btn.onclick = () => { const id = btn.dataset.id; open.has(id) ? open.delete(id) : open.add(id); rerender(id); }; });
     card.querySelectorAll('.cmtGo').forEach(btn => { btn.onclick = () => submitComment(btn.dataset.id); });
+    card.querySelectorAll('.rep:not([disabled])').forEach(btn => { btn.onclick = () => {
+      if(!confirm(btn.dataset.cid ? '이 댓글을 신고할까요?' : '이 글을 신고할까요?')) return;
+      const id = Number(btn.dataset.id), cid = btn.dataset.cid ? Number(btn.dataset.cid) : undefined;
+      const list = store.get('hv_reported', []); list.push(b.id+':'+id+(cid?':'+cid:'')); store.set('hv_reported', list.slice(-300));
+      net.send({ t:'report', b:b.id, id, cid }); rerender();
+    }; });
     card.querySelectorAll('.cmtIn').forEach(inp => {
       inp.value = drafts[inp.dataset.id] || '';
       inp.addEventListener('keydown', e => { if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); submitComment(inp.dataset.id); } });

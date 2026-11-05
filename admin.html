@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>복귀마을 운영자</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;background:#f4efe2;color:#2a2f24;padding:16px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:20px;margin:4px 0 12px}
+  h2{font-size:15px;margin:22px 0 8px;color:#43502a}
+  input,button{font:inherit}
+  input{padding:9px 11px;border:1px solid #d6cdb4;border-radius:10px;background:#fff;min-width:0}
+  button{border:0;border-radius:10px;padding:8px 13px;font-weight:700;background:#5d6b3a;color:#fff;cursor:pointer}
+  button.ghost{background:#fff;color:#2a2f24;border:1px solid #d6cdb4}
+  button.del{background:#c4432b}
+  button:disabled{opacity:.5}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .card{background:#fff;border:1px solid #d6cdb4;border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  .card.flag{border-color:#e0572f;background:#fff4ef}
+  .card.hid{opacity:.75;border-style:dashed}
+  .meta{font-size:12px;color:#7a7a66;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+  .meta .b{background:#e8e1cd;border-radius:999px;padding:1px 8px}
+  .meta .r{background:#e0572f;color:#fff;border-radius:999px;padding:1px 8px}
+  .txt{white-space:pre-wrap;word-break:break-all;font-size:14px;line-height:1.5}
+  .act{margin-top:6px;display:flex;gap:6px}
+  .cm{margin:8px 0 0 12px;padding-left:10px;border-left:3px solid #e8e1cd}
+  .msg{padding:8px 12px;border-radius:10px;background:#2a2f24;color:#fff;font-size:13px;margin:8px 0;display:none}
+  #panel{display:none}
+  .empty{color:#7a7a66;font-size:13px;padding:6px 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛠 복귀마을 운영자</h1>
+  <div class="bar" id="login">
+    <input type="password" id="key" placeholder="운영자 비밀번호" autocomplete="current-password">
+    <button id="go">들어가기</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div id="panel">
+    <div class="bar">
+      <button class="ghost" id="reload">🔄 새로고침</button>
+      <button class="ghost" id="backup">💾 기록 전체 내려받기</button>
+      <button class="ghost" id="out">나가기</button>
+      <span id="counts" style="font-size:12px;color:#7a7a66"></span>
+    </div>
+    <p style="font-size:12.5px;color:#7a7a66;margin:0 0 4px">신고가 있거나 가려진 항목이 맨 위에 와요. 삭제는 되돌릴 수 없어요. 가려진 글은 "복구"로 다시 보이게 할 수 있어요.</p>
+    <div id="flagged"></div>
+    <div id="all"></div>
+    <div id="pledges"></div>
+  </div>
+</div>
+<script>
+const NAMES = { job:'💼 취업관', cert:'📚 자격증 도서관', soon:'📅 전역 준비관', trip:'🧳 여행사', rest:'🍵 쉼터', story:'🔥 군대 썰방' };
+const $ = s => document.querySelector(s);
+let KEY = '';
+try { KEY = sessionStorage.getItem('hv_adm') || ''; } catch (e) {}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+function say(t, bad){ const m = $('#msg'); m.textContent = t; m.style.display = t ? 'block' : 'none'; m.style.background = bad ? '#c4432b' : '#2a2f24'; }
+async function api(path, body){
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'x-admin-key': KEY, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { let e = {}; try { e = await r.json(); } catch (x) {} throw new Error(e.error || ('오류 ' + r.status)); }
+  return r;
+}
+function card(kind, b, p, c){
+  const it = c || p, flag = it.reports > 0 || it.hidden;
+  const cls = 'card' + (flag ? ' flag' : '') + (it.hidden ? ' hid' : '');
+  const data = `data-b="${b}" data-id="${p.id}"${c ? ` data-cid="${c.id}"` : ''}`;
+  return `<div class="${cls}"><div class="meta"><span class="b">${c ? '댓글' : NAMES[b]}</span><b>${esc(it.name)}</b><span>${esc(it.date)}</span>${it.reports ? `<span class="r">신고 ${it.reports}</span>` : ''}${it.hidden ? '<span class="r">가려짐</span>' : ''}</div>
+    <div class="txt">${esc(it.text)}</div>
+    <div class="act">${it.hidden || it.reports ? `<button class="ghost" data-op="restore" ${data}>복구(신고 지우기)</button>` : ''}<button class="del" data-op="delete" ${data}>삭제</button></div></div>`;
+}
+async function load(){
+  say('');
+  try {
+    const d = await (await api('/api/admin/list', {})).json();
+    $('#login').style.display = 'none'; $('#panel').style.display = 'block';
+    $('#counts').textContent = `글 ${d.counts.posts}개 · 다짐 ${d.counts.pledges}개`;
+    const flagged = [], all = [];
+    for (const b of Object.keys(d.posts)) for (const p of d.posts[b]) {
+      if (p.reports || p.hidden) flagged.push(card('p', b, p));
+      p.comments.forEach(c => { if (c.reports || c.hidden) flagged.push(card('c', b, p, c)); });
+      all.push(`<div>${card('p', b, p)}${p.comments.map(c => `<div class="cm">${card('c', b, p, c)}</div>`).join('')}</div>`);
+    }
+    $('#flagged').innerHTML = `<h2>🚩 신고·가려진 항목 (${flagged.length})</h2>` + (flagged.join('') || '<div class="empty">없어요</div>');
+    $('#all').innerHTML = '<h2>📝 모든 글(건물별 최근 200개, 최신순)</h2>' + (all.join('') || '<div class="empty">아직 글이 없어요</div>');
+    $('#pledges').innerHTML = '<h2>🏮 오늘의 다짐(최근 100개)</h2>' + (d.pledges.map(p => `<div class="card"><div class="meta"><b>${esc(p.name)}</b></div><div class="txt">${esc(p.text)}</div><div class="act"><button class="del" data-op="delpledge" data-i="${p.i}" data-text="${esc(p.text)}">삭제</button></div></div>`).join('') || '<div class="empty">없어요</div>');
+    try { sessionStorage.setItem('hv_adm', KEY); } catch (e) {}
+  } catch (e) { say(e.message, true); if (!$('#panel').style.display || $('#panel').style.display === 'none') $('#login').style.display = 'flex'; }
+}
+$('#go').onclick = () => { KEY = $('#key').value; load(); };
+$('#key').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
+$('#reload').onclick = load;
+$('#out').onclick = () => { try { sessionStorage.removeItem('hv_adm'); } catch (e) {} KEY = ''; location.reload(); };
+$('#backup').onclick = async () => {
+  try { const r = await api('/api/admin/backup'); const blob = await r.blob(); const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'homecoming-backup-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); say('내려받았어요. 이 파일에는 좋아요 기록용 고유 번호가 들어 있으니 공개하지 마세요.'); }
+  catch (e) { say(e.message, true); }
+};
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button[data-op]'); if (!t) return;
+  const op = t.dataset.op;
+  if (op === 'delete' && !confirm('정말 삭제할까요? 되돌릴 수 없어요.')) return;
+  t.disabled = true;
+  try {
+    const body = op === 'delpledge' ? { i: Number(t.dataset.i), text: t.dataset.text } : { b: t.dataset.b, id: Number(t.dataset.id), cid: t.dataset.cid ? Number(t.dataset.cid) : undefined };
+    await api('/api/admin/' + op, body); await load();
+  } catch (x) { say(x.message, true); t.disabled = false; }
+});
+if (KEY) load();
+</script>
+</body>
+</html>

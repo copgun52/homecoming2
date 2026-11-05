@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,9 @@ const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대
 const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보내는 최근 개수
 const KEEP_COMMENTS = 300, SHOW_COMMENTS = 30;  // 글 하나당 댓글: 보관 최대 / 화면에 보내는 최근 개수
 const W = 1600, H = 1000;                       // 마을 크기(화면과 같아야 해요)
+const ADMIN_KEY = process.env.ADMIN_KEY || '';  // 운영자 비밀번호. 없으면 운영자 기능은 꺼져 있어요
+const HIDE_AT = 5;                              // 서로 다른 사람 5명이 신고하면 일단 가려요(운영자가 확인)
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');   // 링크 미리보기에 쓰는 주소(없으면 접속한 주소)
 
 /* ---------- 저장되는 데이터: 등불, 건물별 글 ---------- */
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -33,13 +37,18 @@ try {
 BUILDING_IDS.forEach(id => { db.posts[id] = db.posts[id] || []; });
 /* 글마다 번호(id)와 좋아요 누른 사람 목록(likes)이 있어요. 번호가 없는 예전 글에는 번호를 붙여요. */
 db.nextPostId = db.nextPostId || 1;
-BUILDING_IDS.forEach(id => db.posts[id].forEach(p => { if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; if (!Array.isArray(p.comments)) p.comments = []; }));
+BUILDING_IDS.forEach(id => db.posts[id].forEach(p => {
+  if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; if (!Array.isArray(p.comments)) p.comments = []; if (!Array.isArray(p.reports)) p.reports = [];
+  p.comments.forEach(c => { if (!c.id) c.id = db.nextPostId++; if (!Array.isArray(c.reports)) c.reports = []; });
+}));
 /* 화면에 보내는 모양: 누가 눌렀는지(uid)는 숨기고, 개수와 "내가 눌렀는지"만 알려줘요. 댓글은 최근 SHOW_COMMENTS개만(전체 개수는 cn) */
-const view = (p, uid) => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid),
-  comments: p.comments.slice(-SHOW_COMMENTS), cn: p.comments.length });
+const cview = c => ({ id: c.id, name: c.name, text: c.text, date: c.date });
+const view = (p, uid) => { const cs = p.comments.filter(c => !c.hidden);
+  return { id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid),
+    comments: cs.slice(-SHOW_COMMENTS).map(cview), cn: cs.length }; };
 /* 접속할 때: 최근 글 + 좋아요 많은 2개(오래된 글이어도 인기글은 보여야 하니까) */
 function postsFor(id, uid) {
-  const all = db.posts[id];
+  const all = db.posts[id].filter(p => !p.hidden);
   const top = all.filter(p => p.likes.length > 0).sort((a, b) => b.likes.length - a.likes.length || a.id - b.id).slice(0, 2);
   const picked = new Map(); [...all.slice(-SHOW_POSTS), ...top].forEach(p => picked.set(p.id, p));
   return [...picked.values()].sort((a, b) => a.id - b.id).map(p => view(p, uid));
@@ -73,13 +82,99 @@ const str = (v, n) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' '
 const num = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
 const color = v => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#6b7f4a');
 
-/* ---------- HTTP: index.html 하나만 공개 ---------- */
+/* ---------- 도배 방어: 접속한 주소(IP)별 횟수 제한 ---------- */
+const hits = new Map();
+const count = (key, ms) => { const a = hits.get(key); if (!a) return 0; const t = Date.now() - ms; while (a.length && a[0] <= t) a.shift(); return a.length; };
+function hit(key, limit, ms) {          // 허용되면 true(기록), 한도를 넘었으면 false
+  if (count(key, ms) >= limit) return false;
+  let a = hits.get(key); if (!a) hits.set(key, a = []); a.push(Date.now()); return true;
+}
+setInterval(() => { const t = Date.now() - 600000; for (const [k, a] of hits) if (!a.length || a[a.length - 1] < t) hits.delete(k); }, 60000);
+const ipOf = req => String(req.headers['fly-client-ip'] || req.socket.remoteAddress || '?');   // Fly.io는 진짜 접속자 주소를 fly-client-ip로 알려줘요
+const sha = s => crypto.createHash('sha256').update(s).digest();
+const ipKey = ip => sha('hv|' + ip).toString('hex').slice(0, 12);   // 주소 자체는 저장하지 않고 짧은 해시만 써요
+const TEN_MIN = 600000;
+
+/* ---------- 운영자: 삭제·복구·백업 ---------- */
+const findPost = (b, id) => (BUILDING_IDS.includes(b) ? db.posts[b].find(p => p.id === Number(id)) : null);
+function adminApi(req, res, ip, url) {
+  const json = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
+  if (!ADMIN_KEY) return json(503, { error: '운영자 기능이 꺼져 있어요(ADMIN_KEY가 설정되지 않았어요)' });
+  if (count('admfail:' + ip, TEN_MIN) >= 10) return json(429, { error: '틀린 시도가 많아서 잠시 막았어요. 10분 뒤에 다시 해 주세요' });
+  const given = sha(String(req.headers['x-admin-key'] || ''));
+  if (!crypto.timingSafeEqual(given, sha(ADMIN_KEY))) { hit('admfail:' + ip, 99, TEN_MIN); return json(401, { error: '비밀번호가 맞지 않아요' }); }
+
+  if (req.method === 'GET' && url === '/api/admin/backup') {
+    try { flush(); } catch (e) {}
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
+      'Content-Disposition': 'attachment; filename="homecoming-backup-' + new Date().toISOString().slice(0, 10) + '.json"' });
+    return res.end(JSON.stringify(db));
+  }
+  if (req.method !== 'POST') return json(405, { error: 'POST만 돼요' });
+  let body = '', over = false;
+  req.on('data', c => { body += c; if (body.length > 4096) { over = true; req.destroy(); } });
+  req.on('end', () => {
+    if (over) return;
+    let m; try { m = JSON.parse(body || '{}'); } catch (e) { return json(400, { error: '요청이 이상해요' }); }
+    if (url === '/api/admin/list') {
+      const out = {};
+      BUILDING_IDS.forEach(b => {
+        out[b] = db.posts[b].slice(-200).map(p => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, reports: p.reports.length, hidden: !!p.hidden,
+          comments: p.comments.slice(-100).map(c => ({ id: c.id, name: c.name, text: c.text, date: c.date, reports: c.reports.length, hidden: !!c.hidden })) })).reverse();
+      });
+      return json(200, { posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
+        counts: { posts: BUILDING_IDS.reduce((n, b) => n + db.posts[b].length, 0), pledges: db.pledges.length } });
+    }
+    if (url === '/api/admin/delete' || url === '/api/admin/restore') {
+      const post = findPost(m.b, m.id); if (!post) return json(404, { error: '글을 찾지 못했어요' });
+      let target = post, cid = null;
+      if (m.cid) { target = post.comments.find(c => c.id === Number(m.cid)); if (!target) return json(404, { error: '댓글을 찾지 못했어요' }); cid = target.id; }
+      if (url === '/api/admin/restore') { target.hidden = false; target.reports = []; save(); return json(200, { ok: true }); }
+      if (cid) post.comments = post.comments.filter(c => c.id !== cid); else db.posts[m.b] = db.posts[m.b].filter(p => p.id !== post.id);
+      save(); broadcast({ t: 'del', b: m.b, id: post.id, cid });
+      console.log('[운영자] 삭제', m.b, post.id, cid || '');
+      return json(200, { ok: true });
+    }
+    if (url === '/api/admin/delpledge') {
+      const i = Number(m.i), p = db.pledges[i];
+      if (!p || p.text !== m.text) return json(404, { error: '이미 바뀌었어요. 목록을 새로고침해 주세요' });
+      db.pledges.splice(i, 1); save(); broadcast({ t: 'delpledge', x: p.x, y: p.y, text: p.text });
+      console.log('[운영자] 다짐 삭제', p.text);
+      return json(200, { ok: true });
+    }
+    return json(404, { error: '없는 주소예요' });
+  });
+}
+
+/* ---------- HTTP: 화면 파일 몇 개만 공개 ---------- */
+const STATIC = {
+  '/favicon.svg': ['favicon.svg', 'image/svg+xml', 'public, max-age=86400'],
+  '/og.jpg': ['og.jpg', 'image/jpeg', 'public, max-age=86400'],
+  '/admin': ['admin.html', 'text/html; charset=utf-8', 'no-store'],
+};
 const server = http.createServer((req, res) => {
-  if (req.url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
-  if (req.url === '/'|| req.url.startsWith('/?') || req.url === '/index.html') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-    fs.createReadStream(path.join(__dirname, 'index.html')).pipe(res);
-  } else { res.writeHead(404); res.end('not found'); }
+  const url = req.url.split('?')[0], ip = ipOf(req);
+  const head = (type, cache) => ({ 'Content-Type': type, 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' });
+  if (url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
+  if (url.startsWith('/api/admin/')) return adminApi(req, res, ip, url);
+  if (url === '/robots.txt') { res.writeHead(200, head('text/plain', 'public, max-age=86400')); res.end('User-agent: *\nDisallow: /admin\nDisallow: /api/\n'); return; }
+  if (url === '/' || url === '/index.html') {
+    /* 링크 미리보기(og) 주소는 PUBLIC_URL, 없으면 지금 접속한 주소로 채워요 */
+    const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0], host = req.headers.host || 'localhost';
+    const base = PUBLIC_URL || (proto + '://' + host);
+    fs.readFile(path.join(__dirname, 'index.html'), 'utf8', (err, html) => {
+      if (err) { res.writeHead(500); return res.end('error'); }
+      res.writeHead(200, head('text/html; charset=utf-8', 'no-cache')); res.end(html.split('__BASE__').join(base));
+    });
+    return;
+  }
+  const st = STATIC[url];
+  if (st) {
+    const h = head(st[1], st[2]); if (url === '/admin') h['X-Robots-Tag'] = 'noindex';
+    fs.readFile(path.join(__dirname, st[0]), (err, buf) => { if (err) { res.writeHead(404); return res.end('not found'); } res.writeHead(200, h); res.end(buf); });
+    return;
+  }
+  res.writeHead(404); res.end('not found');
 });
 
 /* ---------- WebSocket ---------- */
@@ -91,9 +186,15 @@ const broadcast = (m, except) => { const s = JSON.stringify(m); for (const [ws] 
 const pub = p => ({ id: p.id, name: p.name, uni: p.uni, cap: p.cap, x: p.x, y: p.y, dir: p.dir, act: p.act || null });
 const ACTS = new Set(['sit', 'swing0', 'swing1']);   // 앉기·그네 타기 자세
 
-wss.on('connection', ws => {
+const ipConns = new Map();   // 한 주소에서 동시에 열 수 있는 연결 수
+const MAX_PER_IP = 12;       // 부대·학교처럼 여럿이 같은 주소를 쓸 수 있어서 넉넉하게
+wss.on('connection', (ws, req) => {
   if (players.size >= MAX_PLAYERS) { send(ws, { t: 'full' }); return ws.close(); }
-  const me = { id: nextId++, joined: false, name: '', uni: '', cap: '', x: 700, y: 560, dir: 1, last: 0, tokens: 30, tAt: Date.now() };
+  const ip = ipOf(req), ipk = ipKey(ip);
+  if ((ipConns.get(ip) || 0) >= MAX_PER_IP || !hit('conn:' + ip, 60, 60000)) return ws.close();
+  ipConns.set(ip, (ipConns.get(ip) || 0) + 1);
+  ws.on('close', () => { const n = (ipConns.get(ip) || 1) - 1; n ? ipConns.set(ip, n) : ipConns.delete(ip); });
+  const me = { id: nextId++, ip, ipk, joined: false, name: '', uni: '', cap: '', x: 700, y: 560, dir: 1, last: 0, tokens: 30, tAt: Date.now() };
   ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', raw => {
@@ -134,6 +235,7 @@ wss.on('connection', ws => {
     } else if (m.t === 'pledge') {
       if (now - me.last < 1500) return; me.last = now;
       const text = str(m.text, 30); if (!text) return;
+      if (!hit('pledge:' + ip, 6, TEN_MIN)) return send(ws, { t: 'limit', k: 'pledge' });
       const p = { name: me.name, text, x: num(m.x, 60, W - 60, 700), y: num(m.y, 60, H - 60, 450) };
       db.pledges.push(p); db.pledges = db.pledges.slice(-KEEP_PLEDGES); save();
       broadcast({ t: 'pledge', p });
@@ -141,7 +243,8 @@ wss.on('connection', ws => {
       if (now - me.last < 1500) return; me.last = now;
       if (!BUILDING_IDS.includes(m.b)) return;
       const text = str(m.text, 300); if (!text) return;
-      const post = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), likes: [], comments: [] };
+      if (!hit('post:' + ip, 8, TEN_MIN)) return send(ws, { t: 'limit', k: 'post' });
+      const post = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), likes: [], lip: [], reports: [], comments: [] };
       db.posts[m.b].push(post); db.posts[m.b] = db.posts[m.b].slice(-KEEP_POSTS); save();
       broadcast({ t: 'post', b: m.b, post: view(post, null) });
     } else if (m.t === 'comment') {
@@ -149,14 +252,36 @@ wss.on('connection', ws => {
       if (!BUILDING_IDS.includes(m.b)) return;
       const post = db.posts[m.b].find(p => p.id === Number(m.id)); if (!post) return;
       const text = str(m.text, 150); if (!text) return;
-      const c = { name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) };
+      if (post.hidden) return;
+      if (!hit('cmt:' + ip, 30, TEN_MIN)) return send(ws, { t: 'limit', k: 'comment' });
+      const c = { id: db.nextPostId++, name: me.name, text, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }), reports: [] };
       post.comments.push(c); post.comments = post.comments.slice(-KEEP_COMMENTS); save();
-      broadcast({ t: 'comment', b: m.b, id: post.id, c, cn: post.comments.length });
+      const cn = post.comments.filter(x => !x.hidden).length;
+      broadcast({ t: 'comment', b: m.b, id: post.id, c: cview(c), cn });
+    } else if (m.t === 'report') {
+      /* 신고: 주소(IP)당 한 번. 서로 다른 5명이 신고하면 일단 가리고 운영자가 확인해요 */
+      const post = findPost(m.b, m.id); if (!post) return;
+      if (!hit('rep:' + ip, 20, TEN_MIN)) return send(ws, { t: 'limit', k: 'report' });
+      let tgt = post, cid = null;
+      if (m.cid) { tgt = post.comments.find(c => c.id === Number(m.cid)); if (!tgt) return; cid = tgt.id; }
+      tgt.reports = tgt.reports || [];
+      if (!tgt.reports.includes(me.ipk)) {
+        tgt.reports.push(me.ipk);
+        if (tgt.reports.length >= HIDE_AT && !tgt.hidden) { tgt.hidden = true; broadcast({ t: 'del', b: m.b, id: post.id, cid }); }
+        save();
+      }
+      send(ws, { t: 'reported', b: m.b, id: post.id, cid });
     } else if (m.t === 'like') {
       /* 한 사람(브라우저)당 글마다 한 번만. 이미 눌렀으면 개수만 다시 알려줘요 */
       if (!BUILDING_IDS.includes(m.b)) return;
       const post = db.posts[m.b].find(p => p.id === Number(m.id)); if (!post) return;
-      if (!post.likes.includes(me.uid)) { post.likes.push(me.uid); save(); }
+      /* 브라우저 번호는 새로 만들 수 있으니, 같은 주소에서 한 글에 누를 수 있는 좋아요는 3개까지로 막아요 */
+      if (!post.likes.includes(me.uid)) {
+        if (!hit('like:' + ip, 80, TEN_MIN)) return send(ws, { t: 'limit', k: 'like' });
+        post.lip = post.lip || [];
+        if (post.lip.filter(k => k === me.ipk).length < 3) { post.likes.push(me.uid); post.lip.push(me.ipk); save(); }
+        else return send(ws, { t: 'limit', k: 'like' });
+      }
       const n = post.likes.length;
       broadcast({ t: 'like', b: m.b, id: post.id, n }, ws);
       send(ws, { t: 'like', b: m.b, id: post.id, n, you: true });
