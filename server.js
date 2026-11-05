@@ -88,7 +88,8 @@ const players = new Map();
 let nextId = 1;
 const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
 const broadcast = (m, except) => { const s = JSON.stringify(m); for (const [ws] of players) if (ws !== except && ws.readyState === 1) ws.send(s); };
-const pub = p => ({ id: p.id, name: p.name, uni: p.uni, cap: p.cap, x: p.x, y: p.y, dir: p.dir });
+const pub = p => ({ id: p.id, name: p.name, uni: p.uni, cap: p.cap, x: p.x, y: p.y, dir: p.dir, act: p.act || null });
+const ACTS = new Set(['sit', 'swing0', 'swing1']);   // 앉기·그네 타기 자세
 
 wss.on('connection', ws => {
   if (players.size >= MAX_PLAYERS) { send(ws, { t: 'full' }); return ws.close(); }
@@ -115,8 +116,17 @@ wss.on('connection', ws => {
     if (!me.joined) return;
 
     if (m.t === 'move') {
-      me.x = num(m.x, 0, W, me.x); me.y = num(m.y, 0, H, me.y); me.dir = m.dir === -1 ? -1 : 1;
+      me.x = num(m.x, 0, W, me.x); me.y = num(m.y, 0, H, me.y); me.dir = m.dir === -1 ? -1 : 1; me.act = null;
       broadcast({ t: 'move', id: me.id, x: me.x, y: me.y, dir: me.dir }, ws);
+    } else if (m.t === 'act') {
+      /* 자세(앉기·그네)와 그 자리. 일어서면 a가 null */
+      me.act = ACTS.has(m.a) ? m.a : null;
+      me.x = num(m.x, 0, W, me.x); me.y = num(m.y, 0, H, me.y); me.dir = m.dir === -1 ? -1 : 1;
+      broadcast({ t: 'act', id: me.id, a: me.act, x: me.x, y: me.y, dir: me.dir }, ws);
+    } else if (m.t === 'fx') {
+      /* 폭죽: 광장 위쪽 고정 범위에서만, 3초에 한 번 */
+      if (m.k !== 'fw' || now - (me.lastFx || 0) < 2800) return; me.lastFx = now;
+      broadcast({ t: 'fx', k: 'fw', x: num(m.x, 600, 1000, 800), y: num(m.y, 480, 640, 578) }, ws);
     } else if (m.t === 'say') {
       if (now - me.last < 400) return; me.last = now;
       const text = str(m.text, 40); if (!text) return;

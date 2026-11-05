@@ -117,7 +117,7 @@
   <div class="chip" id="online">마을 주민 <b>0</b>명</div>
   <button class="chip" id="todBtn" title="하루 시간대 바꾸기">🕒 자동</button>
 </div>
-<div class="hint">방향키 / WASD 이동 · 바닥 클릭·탭으로 이동<br>건물 앞에서 E 또는 [입장] · Enter로 채팅</div>
+<div class="hint">방향키 / WASD 이동 · 바닥 클릭·탭으로 이동<br>건물 앞·벤치·그네 앞에서 E 또는 버튼<br>Enter로 채팅 · 1~5 감정 표현 (😄 👏 💪 😭 🫡)</div>
 
 <button class="enter" id="enterBtn">입장</button>
 <div id="log"></div>
@@ -163,6 +163,9 @@ const PLAZA = { x:800, y:520, rx:220, ry:120 };
 const POND = { x:250, y:610, rx:125, ry:80 };
 const CAMP = { x:1340, y:570 };
 const SIGNPOST = { x:590, y:405 };
+const WELCOME = { x:800, y:638 };   // 광장 한가운데 환영 표지판
+const PLAY = { x:1250, y:445 };     // 놀이터(그네)
+const SWINGS = [ { id:'swing0', ax:PLAY.x-36, ay:PLAY.y-70, L:56, ph:0 }, { id:'swing1', ax:PLAY.x+36, ay:PLAY.y-70, L:56, ph:1.7 } ];
 /* 위 세 건물은 윗길(y=330)에, 아래 세 건물은 아랫길(y=900)에 문이 닿아요. route는 광장에서 문 앞까지 가는 길목(주민이 따라 걸어요) */
 const BUILDINGS = [
   { id:'job', theme:'office', name:'취업관', emoji:'💼', x:130, y:110, w:240, h:150, wall:'#eadcb9', roof:'#4f78a8', trim:'#34567f',
@@ -170,7 +173,7 @@ const BUILDINGS = [
     desc:'공채·수시채용, 이력서, 면접 준비',
     example:'이력서에 군 경력을 어떻게 써야 할지 막막해요. 직무와 연결해서 써 보신 분, 방법 좀 알려 주세요.' },
   { id:'cert', theme:'library', name:'자격증 도서관', emoji:'📚', x:680, y:110, w:240, h:150, wall:'#e3d2ac', roof:'#8a5a3c', trim:'#5e3b26',
-    route:[[800,400],[800,330]],
+    route:[[930,470],[800,400],[800,330]],
     desc:'자격증·어학·공시 준비 스터디',
     example:'전역하고 첫 자격증으로 뭘 준비하셨나요? 목표 직무가 아직 없을 때 어떤 기준으로 골랐는지 궁금해요.' },
   { id:'soon', theme:'calendar', name:'전역 준비관', emoji:'📅', x:1230, y:110, w:240, h:150, wall:'#ecdcb6', roof:'#3f7a62', trim:'#2c5645',
@@ -217,6 +220,8 @@ function isFree(x, y, pad=0){
   if(((x-POND.x)/(POND.rx+pad))**2 + ((y-POND.y)/(POND.ry+pad))**2 < 1) return false;
   if(Math.hypot(x-CAMP.x, y-CAMP.y) < 95+pad) return false;
   if(Math.hypot(x-SIGNPOST.x, y-SIGNPOST.y) < 40+pad) return false;
+  if(((x-PLAY.x)/(140+pad))**2 + ((y-PLAY.y-10)/(92+pad))**2 < 1) return false;
+  if(Math.hypot(x-1104, y-524) < 44+pad) return false;
   return true;
 }
 const TREES = [];
@@ -227,10 +232,24 @@ for(let i=0; i<2500 && TREES.length<58; i++){
   TREES.push({ x, y, type: nearPond && rnd()<.7 ? 2 : (rnd()<.33 ? 1 : 0), s: .85+rnd()*.3 });
 }
 
+/* 앉거나 올라타거나 눌러서 즐기는 곳. (x,y)는 앉았을 때의 위치, r은 이 거리 안에서 E 버튼이 떠요 */
+const SEATS = [
+  ...[[690,642],[910,642]].map(([x,y],i) => ({ id:'bench'+i, kind:'sit', x, y:y-2, dir:x<PLAZA.x?1:-1, label:'🪑 벤치에 앉기', r:46 })),
+  { id:'bench2', kind:'sit', x:330, y:740, dir:1, label:'🪑 연못 앞 벤치에 앉기', r:46 },
+  { id:'bench3', kind:'sit', x:1104, y:522, dir:1, label:'🪑 놀이터 벤치에 앉기', r:46 },
+  ...[.5,2.1,3.6,5.1].map((a,i) => { const x = CAMP.x+Math.cos(a)*76, y = CAMP.y+8+Math.sin(a)*46; return { id:'log'+i, kind:'sit', x, y:y-3, dir:x<CAMP.x?1:-1, label:'🔥 통나무에 앉아 불멍', fire:true, r:48 }; }),
+];
+const INTERACTS = [
+  ...SEATS,
+  ...SWINGS.map(s => ({ id:s.id, kind:'swing', x:s.ax, y:PLAY.y+14, dir:1, label:'🎠 그네 타기', r:42 })),
+  { id:'wish', kind:'wish', x:PLAZA.x, y:PLAZA.y-22, label:'🪙 분수에 소원 빌기', r:98 },
+  { id:'fw', kind:'fireworks', x:WELCOME.x, y:WELCOME.y+22, label:'🎆 축하 폭죽 터뜨리기', r:58 },
+];
+
 /* ---------- state ---------- */
 const COLORS_UNI = ['#6b7f4a','#4f6d8f','#8c3b3b','#d9822b','#444b55','#c9a3b8'];
 const COLORS_CAP = ['#2f3a22','#2a2f3a','#d9d2bd','#c0392b','#e0b13a','#3d6f8a'];
-const me = { name:'', uni:COLORS_UNI[0], cap:COLORS_CAP[0], x:PLAZA.x, y:PLAZA.y+120, dir:1, step:0, say:'', sayT:0, speed:170 };
+const me = { name:'', uni:COLORS_UNI[0], cap:COLORS_CAP[0], x:PLAZA.x+130, y:PLAZA.y+96, dir:1, step:0, say:'', sayT:0, speed:170 };
 let discharge = '';
 const keys = {};
 let target = null;
@@ -242,7 +261,7 @@ const NPC_NAMES = ['취준생민수','복학생J','자격증러','예비창업�
 const NPC_SAYS = ['🫡','오늘 뭐하지…','같이 스터디할 사람?','토익 접수했다','나만 막막한 거 아니었네','쉼터 가서 쉴까','일단 산책!','이력서 쓰다 왔어요'];
 const npcs = NPC_NAMES.map((n,i) => ({
   name:n, uni:COLORS_UNI[i%6], cap:COLORS_CAP[(i*2+1)%6],
-  x:PLAZA.x+(Math.random()-.5)*340, y:PLAZA.y+80+Math.random()*30, dir:1, step:Math.random()*9, say:'', sayT:0, speed:62+Math.random()*30,
+  x:PLAZA.x+(Math.random()<.5?-1:1)*(110+Math.random()*130), y:PLAZA.y+84+Math.random()*30, dir:1, step:Math.random()*9, say:'', sayT:0, speed:62+Math.random()*30,
   tx:null, ty:null, wait:Math.random()*4, q:[], at:'plaza'   // at: 지금 광장에 있는지, 어느 건물 앞인지
 }));
 
@@ -255,18 +274,21 @@ function myUid(){
   if(!u){ u = (crypto.randomUUID ? crypto.randomUUID() : 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)); store.set('hv_uid', u); }
   return u;
 }
-function addRemote(p){ net.players.set(p.id, { ...p, tx:p.x, ty:p.y, step:0, say:'', sayT:0 }); }
+function addRemote(p){ net.players.set(p.id, { ...p, tx:p.x, ty:p.y, step:0, say:'', sayT:0, act:p.act||null }); }
 function connect(){
   if(!/^https?:$/.test(location.protocol)) return;
   let ws; try{ ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host); }catch(e){ return; }
-  net.ws = ws;
+  const old = net.ws; net.ws = ws;
+  if(old && old.readyState < 2){ try{ old.close(); }catch(e){} }   // 연결이 겹치지 않게 옛 연결은 닫아요
   ws.onopen = () => ws.send(JSON.stringify({ t:'join', uid:myUid(), name:me.name, uni:me.uni, cap:me.cap, x:me.x, y:me.y }));
   ws.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch(_){ return; }
     if(m.t==='init'){ net.on=true; net.id=m.id; net.players.clear(); m.players.forEach(addRemote); net.pledges=m.pledges||[]; net.posts=m.posts||{}; toast('🌐 실시간으로 연결됐어요'); }
     else if(m.t==='join') addRemote(m.p);
     else if(m.t==='leave') net.players.delete(m.id);
-    else if(m.t==='move'){ const r=net.players.get(m.id); if(r){ r.tx=m.x; r.ty=m.y; r.dir=m.dir; } }
+    else if(m.t==='move'){ const r=net.players.get(m.id); if(r){ r.tx=m.x; r.ty=m.y; r.dir=m.dir; r.act=null; } }
+    else if(m.t==='act'){ const r=net.players.get(m.id); if(r){ r.act=m.a||null; r.x=r.tx=m.x; r.y=r.ty=m.y; r.dir=m.dir; } }
+    else if(m.t==='fx'){ if(m.k==='fw') launchFw(m.x,m.y); }
     else if(m.t==='say'){ const r=net.players.get(m.id); if(r){ r.say=m.text; r.sayT=4.5; logChat(r.name, m.text); } }
     else if(m.t==='pledge') net.pledges.push(m.p);
     else if(m.t==='post'){ (net.posts[m.b] = net.posts[m.b]||[]).push(m.post); if(net.rerender) net.rerender(m.b); }
@@ -274,7 +296,10 @@ function connect(){
     else if(m.t==='like'){ const p=(net.posts[m.b]||[]).find(x=>x.id===m.id); if(p){ p.likes=m.n; if(m.you) p.liked=true; if(net.rerender) net.rerender(m.b); } }
     else if(m.t==='full') toast('마을이 가득 찼어요. 잠시 후 다시 시도해 주세요');
   };
-  ws.onclose = () => { const was=net.on; net.on=false; net.players.clear(); if(was) toast('연결이 끊겼어요. 다시 연결 중…'); if(started) setTimeout(connect, 3000); };
+  ws.onclose = () => {
+    if(net.ws !== ws) return;   // 이미 새 연결로 바뀐 뒤에 늦게 도착한 옛 연결의 종료 신호는 무시해요
+    const was=net.on; net.on=false; net.players.clear(); if(was) toast('연결이 끊겼어요. 다시 연결 중…'); if(started) setTimeout(connect, 3000);
+  };
   ws.onerror = () => {};
 }
 
@@ -356,20 +381,31 @@ function circ(c, x, y, r){ c.beginPath(); c.arc(x,y,r,0,7); }
 function ell(c, x, y, rx, ry){ c.beginPath(); c.ellipse(x,y,rx,ry,0,0,7); }
 
 /* ----- 사람 ----- */
+/* 앉아 있거나 그네를 타는 중인지 */
+const isSeated = p => !!p.act && (p.act==='sit' || p.act.startsWith('swing'));
 function person(c, p, x, y, label){
-  const moving = p._ls !== p.step; p._ls = p.step;
+  const sit = isSeated(p), swing = sit && p.act!=='sit';
+  const moving = !sit && p._ls !== p.step; p._ls = p.step;
   const sw = moving ? Math.sin(p.step) : 0;
   const bob = moving ? -Math.abs(Math.sin(p.step))*1.7 : Math.sin(performance.now()/520)*.5;
   c.save(); c.translate(x,y);
-  c.fillStyle='rgba(20,30,10,.28)'; ell(c,0,1,10.5,3.6); c.fill();
+  if(!sit){ c.fillStyle='rgba(20,30,10,.28)'; ell(c,0,1,10.5,3.6); c.fill(); }
   c.scale((p.dir||1)*1.12, 1.12); c.lineJoin='round'; c.lineWidth=1.3; c.strokeStyle=OL;
-  [[-3.6,-sw],[3.6,sw]].forEach(([lx,s]) => { const lift = Math.max(0,s)*2.4;
+  if(sit){
+    c.translate(0,8.5);   // 앉으면 엉덩이가 (x,y)에 오도록 몸을 내려요
+    const kick = swing ? Math.sin(performance.now()/260)*.45 : 0;
+    [[0,0],[2.6,-1.3]].forEach(([dx,dy],i) => {
+      c.fillStyle='#434a58'; rr(c,-5+dx,-10.5+dy,17,6.5,3); c.fill(); c.stroke();
+      c.save(); c.translate(9.5+dx,-7+dy); c.rotate(kick*(i?-1:1));
+      c.fillStyle='#434a58'; rr(c,-2.5,-1,5,10,2.2); c.fill(); c.stroke();
+      c.fillStyle='#2b2622'; rr(c,-3,7,8,3.6,1.7); c.fill(); c.restore(); });
+  } else [[-3.6,-sw],[3.6,sw]].forEach(([lx,s]) => { const lift = Math.max(0,s)*2.4;
     c.fillStyle='#434a58'; rr(c,lx-2.4,-10-lift,4.8,9.6,2); c.fill(); c.stroke();
     c.fillStyle='#2b2622'; rr(c,lx-3,-2.4-lift,7.2,3.8,1.7); c.fill(); });
   c.fillStyle=p.uni; rr(c,-7.2,-23+bob,14.4,14.5,4.5); c.fill(); c.stroke();
   c.fillStyle='rgba(0,0,0,.22)'; c.fillRect(-7.2,-12.5+bob,14.4,2.2);
   c.fillStyle='rgba(255,255,255,.25)'; c.fillRect(-1.3,-22.5+bob,2.6,10);
-  [[-8.6,sw],[8.6,-sw]].forEach(([ax,s]) => { c.save(); c.translate(ax,-21+bob); c.rotate(s*.7);
+  [[-8.6,sw],[8.6,-sw]].forEach(([ax,s]) => { c.save(); c.translate(ax,-21+bob); c.rotate(sit ? (swing ? -2.3 : -1.0) : s*.7);
     c.fillStyle=p.uni; rr(c,-2.2,-1,4.4,10,2.2); c.fill(); c.stroke();
     c.fillStyle='#f5cfa5'; circ(c,0,10,2.4); c.fill(); c.restore(); });
   c.fillStyle='#f5cfa5'; circ(c,0,-30+bob,8); c.fill(); c.stroke();
@@ -592,10 +628,15 @@ function buildBg(){
   g.fillStyle = '#ecdcae'; ell(g,PLAZA.x,PLAZA.y,PLAZA.rx,PLAZA.ry); g.fill();
   [.93,.76,.59].forEach(k => { g.strokeStyle = 'rgba(140,108,58,.3)'; g.lineWidth = 2; ell(g,PLAZA.x,PLAZA.y,PLAZA.rx*k,PLAZA.ry*k); g.stroke(); });
   g.strokeStyle = 'rgba(140,108,58,.16)'; g.lineWidth = 1.5; for(let i=0;i<24;i++){ const a = i*Math.PI/12; g.beginPath(); g.moveTo(PLAZA.x+Math.cos(a)*70,PLAZA.y+Math.sin(a)*38); g.lineTo(PLAZA.x+Math.cos(a)*PLAZA.rx*.93,PLAZA.y+Math.sin(a)*PLAZA.ry*.93); g.stroke(); }
-  g.save(); g.translate(PLAZA.x,PLAZA.y+10); g.scale(1,.56); g.fillStyle = '#d6bd83'; g.beginPath();
+  g.save(); g.translate(PLAZA.x,PLAZA.y-24); g.scale(1,.56); g.fillStyle = '#d6bd83'; g.beginPath();
   for(let i=0;i<16;i++){ const r = i%2 ? 56 : 104, a = i*Math.PI/8 - Math.PI/2; i ? g.lineTo(Math.cos(a)*r,Math.sin(a)*r) : g.moveTo(Math.cos(a)*r,Math.sin(a)*r); } g.closePath(); g.fill();
   g.strokeStyle = 'rgba(140,108,58,.45)'; g.lineWidth = 2.5; g.stroke(); g.restore();
   bench(g,690,642); bench(g,910,642); bench(g,330,742);
+  /* 놀이터 모래밭 */
+  g.fillStyle = '#c4a874'; ell(g,PLAY.x,PLAY.y+28,130,64); g.fill();
+  g.fillStyle = '#efdcaa'; ell(g,PLAY.x,PLAY.y+28,121,57); g.fill();
+  for(let i=0;i<90;i++){ const dx = (R()-.5)*230, dy = (R()-.5)*104; if((dx/112)**2+(dy/50)**2>1) continue; g.fillStyle = 'rgba(176,146,86,.28)'; circ(g,PLAY.x+dx,PLAY.y+28+dy,1.4); g.fill(); }
+  bench(g,1104,524);   // 모래 위에 겹치지 않게 모래밭 왼쪽 밖에, 모래보다 나중에 그려요
   /* 연못 */
   g.fillStyle = '#d4bf86'; ell(g,POND.x,POND.y,POND.rx+15,POND.ry+12); g.fill();
   for(let i=0;i<26;i++){ const a = i/26*Math.PI*2; g.fillStyle = i%2 ? '#9a9588' : '#b3ad9f'; ell(g,POND.x+Math.cos(a)*(POND.rx+10),POND.y+Math.sin(a)*(POND.ry+7),7+R()*3,4.5+R()*2); g.fill(); g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1; g.stroke(); }
@@ -624,8 +665,26 @@ function buildBg(){
   for(let y=14;y<H;y+=22){ hedge(2,y); hedge(W-2,y+8); }
   return c;
 }
-let bgCv = null, treeSpr = [], signSpr = null;
-function buildAll(){ BUILDINGS.forEach(buildSprite); treeSpr = [0,1,2].map(treeSprite); signSpr = buildSign(); bgCv = buildBg(); }
+/* ----- 광장 환영 표지판 ----- */
+function fitText(g, txt, maxW, size){ do { g.font = '400 '+size+'px '+FONT; size -= .5; } while(g.measureText(txt).width > maxW && size > 8); }
+function buildWelcome(){
+  const [c, g] = mk(260,130); g.translate(130,118); g.lineJoin = 'round'; g.textAlign = 'center';
+  g.fillStyle = 'rgba(20,30,10,.26)'; ell(g,0,3,108,8); g.fill();
+  [-80,80].forEach(x => { g.fillStyle = '#6b4a2e'; rr(g,x-5,-92,10,94,2); g.fill(); g.strokeStyle = OL; g.lineWidth = 1.3; g.stroke();
+    g.fillStyle = '#e7c46a'; circ(g,x,-96,4.6); g.fill(); g.stroke(); });
+  g.fillStyle = 'rgba(0,0,0,.22)'; rr(g,-96,-84,196,72,10); g.fill();
+  g.fillStyle = '#b9824a'; rr(g,-100,-90,200,74,10); g.fill(); g.strokeStyle = OL; g.lineWidth = 2; g.stroke();
+  g.fillStyle = '#dcaa6c'; rr(g,-94,-84,188,62,7); g.fill();
+  g.strokeStyle = 'rgba(110,70,30,.32)'; g.lineWidth = 1; for(let y=-70;y<-28;y+=14){ g.beginPath(); g.moveTo(-94,y); g.lineTo(94,y); g.stroke(); }
+  g.fillStyle = '#e7c46a'; [[-92,-82],[92,-82],[-92,-24],[92,-24]].forEach(([x,y]) => { circ(g,x,y,1.8); g.fill(); });
+  const line = (txt, y, size, col) => { fitText(g,txt,176,size); g.lineWidth = 3.2; g.strokeStyle = 'rgba(80,44,14,.85)'; g.strokeText(txt,0,y); g.fillStyle = col; g.fillText(txt,0,y); };
+  line('🪖 전역자 여러분,', -64, 15, '#fff6dc');
+  line('자유롭게 소통해 봐요!', -42, 20, '#ffe08a');
+  line('건물에 들어가 글을 남겨요 🫡', -26.5, 10.5, '#fff6dc');
+  return c;
+}
+let bgCv = null, treeSpr = [], signSpr = null, welcomeSpr = null;
+function buildAll(){ BUILDINGS.forEach(buildSprite); treeSpr = [0,1,2].map(treeSprite); signSpr = buildSign(); welcomeSpr = buildWelcome(); bgCv = buildBg(); }
 buildAll();
 if(document.fonts && document.fonts.load){ Promise.all([document.fonts.load('700 15px Jua'), document.fonts.load('600 12px Jua')]).then(() => buildAll()).catch(() => {}); }
 
@@ -648,7 +707,7 @@ function campfire(c, t){
   c.restore();
 }
 function fountain(c, t){
-  const x = PLAZA.x, y = PLAZA.y+14;
+  const x = PLAZA.x, y = PLAZA.y-22;
   c.fillStyle = 'rgba(20,30,10,.25)'; ell(c,x+6,y+24,70,26); c.fill();
   c.fillStyle = '#9a9382'; ell(c,x,y+10,64,31); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.4; c.stroke();
   c.fillStyle = '#cfc9b8'; ell(c,x,y,64,31); c.fill(); c.stroke();
@@ -718,15 +777,94 @@ function drawFlyers(c, t, n){
     c.strokeStyle = '#2a2f33'; c.lineWidth = 1.8; c.lineCap = 'round'; c.beginPath(); c.moveTo(b.x-8,b.y-fl); c.quadraticCurveTo(b.x-3,b.y-3+fl*.3,b.x,b.y); c.quadraticCurveTo(b.x+3,b.y-3+fl*.3,b.x+8,b.y-fl); c.stroke(); c.lineCap = 'butt'; });
 }
 
+/* ---------- 상호작용: 앉기·그네·소원·폭죽 ---------- */
+let nearI = null, wishAt = 0, fwAt = 0;
+const coins = [], ripples = [], rockets = [], fwSparks = [];
+const FW_COLORS = ['#ff5d73','#ffd166','#5bd1ff','#9bf06b','#c792ff','#ff9f43'];
+function visPos(p, t){   // 이름표·말풍선이 붙는 자리(그네는 흔들리는 자리, 앉으면 조금 아래)
+  const s = p.act && SWINGS.find(w => w.id===p.act);
+  if(s){ const th = Math.sin(t*2.1+s.ph)*.55; return { x:s.ax+s.L*Math.sin(th), y:s.ay+s.L*Math.cos(th)+9.5 }; }
+  return { x:p.x, y:p.y+(isSeated(p) ? 9.5 : 0) };
+}
+function swingSet(c, t){
+  const X = PLAY.x, base = PLAY.y+10, top = PLAY.y-74;
+  c.fillStyle = 'rgba(20,30,10,.2)'; ell(c,X,base+4,104,8); c.fill();
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  [-86,86].forEach(dx => { c.strokeStyle = OL; c.lineWidth = 8; c.beginPath(); c.moveTo(X+dx-16,base); c.lineTo(X+dx,top); c.lineTo(X+dx+16,base); c.stroke();
+    c.strokeStyle = '#d4a05a'; c.lineWidth = 5; c.beginPath(); c.moveTo(X+dx-16,base); c.lineTo(X+dx,top); c.lineTo(X+dx+16,base); c.stroke(); });
+  c.fillStyle = '#c98f4f'; rr(c,X-96,top-6,192,10,4); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.4; c.stroke();
+  const riders = [me, ...net.players.values()];
+  SWINGS.forEach(s => {
+    const rider = riders.find(r => r.act===s.id), th = Math.sin(t*2.1+s.ph)*(rider ? .55 : .05);
+    const sx = s.ax+s.L*Math.sin(th), sy = s.ay+s.L*Math.cos(th);
+    c.strokeStyle = '#6b5a3a'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(s.ax-7,s.ay); c.lineTo(sx-7,sy); c.moveTo(s.ax+7,s.ay); c.lineTo(sx+7,sy); c.stroke();
+    if(rider){ person(c,rider,sx,sy,false); }
+    c.fillStyle = '#e0573a'; rr(c,sx-10,sy,20,4.4,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();
+  });
+  c.lineCap = 'butt';
+}
+function launchFw(x, y){
+  for(let i=0;i<3;i++) rockets.push({ x:x+(i-1)*84+(Math.random()-.5)*30, y0:y-30, y1:y-230-Math.random()*70, t:-i*.3, col:FW_COLORS[Math.floor(Math.random()*FW_COLORS.length)] });
+}
+function stepAct(dt){
+  for(let i=coins.length-1;i>=0;i--){ const q = coins[i]; q.t += dt; if(q.t>=.8){ ripples.push({ x:PLAZA.x+(Math.random()-.5)*56, y:PLAZA.y-20+(Math.random()-.5)*16, t:0 }); coins.splice(i,1); } }
+  for(let i=ripples.length-1;i>=0;i--){ ripples[i].t += dt; if(ripples[i].t>1.3) ripples.splice(i,1); }
+  for(let i=rockets.length-1;i>=0;i--){ const r = rockets[i]; r.t += dt;
+    if(r.t>=.8){ for(let k=0;k<46;k++){ const a = Math.random()*Math.PI*2, sp = 40+Math.random()*95; fwSparks.push({ x:r.x, y:r.y1, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:0, col:r.col }); } rockets.splice(i,1); } }
+  for(let i=fwSparks.length-1;i>=0;i--){ const s = fwSparks[i]; s.life += dt; s.vy += 70*dt; s.vx *= .985; s.x += s.vx*dt; s.y += s.vy*dt; if(s.life>1.5) fwSparks.splice(i,1); }
+}
+function drawActFx(c, t){
+  coins.forEach(q => { const p = q.t/.8, x = q.sx+(PLAZA.x-q.sx)*p, y = q.sy+((PLAZA.y-24)-q.sy)*p-70*Math.sin(p*Math.PI);
+    c.fillStyle = '#ffd24a'; c.strokeStyle = '#a8761a'; c.lineWidth = 1.2; ell(c,x,y,4.2,Math.max(1,4.2*Math.abs(Math.cos(t*14)))); c.fill(); c.stroke(); });
+  ripples.forEach(r => { const p = r.t/1.3; c.strokeStyle = 'rgba(255,255,255,'+(.8*(1-p))+')'; c.lineWidth = 1.6; ell(c,r.x,r.y,6+p*30,2.6+p*12); c.stroke();
+    if(r.t<.25){ c.fillStyle = 'rgba(255,255,255,.9)'; for(let k=0;k<5;k++){ circ(c,r.x+(k-2)*3,r.y-r.t*40*(1-Math.abs(k-2)*.2),1.4); c.fill(); } } });
+}
+function drawFw(c){
+  c.globalCompositeOperation = 'lighter';
+  rockets.forEach(r => { if(r.t<0) return; const p = r.t/.8, y = r.y0+(r.y1-r.y0)*p; c.fillStyle = '#fff3c8'; circ(c,r.x,y,2.4); c.fill(); c.strokeStyle = 'rgba(255,220,140,.5)'; c.lineWidth = 2; c.beginPath(); c.moveTo(r.x,y); c.lineTo(r.x,y+22); c.stroke(); });
+  fwSparks.forEach(s => { const a = Math.max(0,1-s.life/1.5); c.fillStyle = s.col; c.globalAlpha = a; circ(c,s.x,s.y,2.3*a+.6); c.fill(); });
+  c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+}
+function seatTaken(it){
+  const others = net.on ? [...net.players.values()] : npcs;
+  return it.kind==='sit' ? others.some(r => r.act==='sit' && Math.hypot(r.x-it.x,r.y-it.y)<9) : others.some(r => r.act===it.id);
+}
+function sendAct(){ net.lx = me.x; net.ly = me.y; net.send({ t:'act', a:me.act||null, x:Math.round(me.x), y:Math.round(me.y), dir:me.dir }); }
+function stand(){ if(!me.act) return; me.act = null; sendAct(); }
+function useInteract(it){
+  const now = performance.now();
+  if(it.kind==='sit' || it.kind==='swing'){
+    if(seatTaken(it)){ toast('이미 누가 앉아 있어요'); return; }
+    target = null; me.x = it.x; me.y = it.y; me.dir = it.dir||1; me.act = it.kind==='sit' ? 'sit' : it.id; sendAct();
+    const line = it.fire ? '🔥 불멍 중…' : (it.kind==='swing' ? '🎠 신난다!' : null);
+    if(line){ say(me,line,3500); net.send({ t:'say', text:line }); }
+  } else if(it.kind==='wish'){
+    if(now-wishAt<1600) return; wishAt = now;
+    coins.push({ sx:me.x, sy:me.y-30, t:0 }); const line = '🪙 소원을 빌었어요'; say(me,line,3200); net.send({ t:'say', text:line });
+  } else if(it.kind==='fireworks'){
+    if(now-fwAt<3000){ toast('폭죽을 준비하는 중이에요'); return; } fwAt = now;
+    const x = WELCOME.x, y = WELCOME.y-60; launchFw(x,y); net.send({ t:'fx', k:'fw', x, y });
+    const line = '🎉 전역 축하해요!'; say(me,line,3200); net.send({ t:'say', text:line });
+  }
+}
+function actKey(){   // E 키·버튼: 건물 입장 → 일어서기 → 눈앞의 상호작용
+  if(inModal || !started) return;
+  if(nearB) openBuilding(nearB); else if(me.act) stand(); else if(nearI) useInteract(nearI);
+}
+const EMOTES = ['😄','👏','💪','😭','🫡'];
+function emote(i){ const e = EMOTES[i]; say(me,e,2500); net.send({ t:'say', text:e }); }
+
 /* ---------- logic ---------- */
 function blocked(x,y){
   if(x<34||y<46||x>W-34||y>H-30) return true;
   for(const b of BUILDINGS){ if(x>b.x-8 && x<b.x+b.w+8 && y>b.y+34 && y<b.y+b.h+2) return true; }
   for(const t of TREES){ if(Math.hypot(x-t.x,(y-t.y)*1.3)<13*t.s) return true; }
   if(((x-POND.x)/(POND.rx*.9))**2 + ((y-POND.y)/(POND.ry*.88))**2 < 1) return true;
-  if(((x-PLAZA.x)/58)**2 + ((y-(PLAZA.y+12))/28)**2 < 1) return true;
+  if(((x-PLAZA.x)/58)**2 + ((y-(PLAZA.y-20))/28)**2 < 1) return true;
   if(Math.hypot(x-CAMP.x,y-CAMP.y)<18) return true;
   if(Math.hypot(x-SIGNPOST.x,y-SIGNPOST.y)<11) return true;
+  if(Math.hypot(x-(PLAY.x-86),y-(PLAY.y+10))<9 || Math.hypot(x-(PLAY.x+86),y-(PLAY.y+10))<9) return true;   // 그네 기둥
+  if(x>WELCOME.x-96 && x<WELCOME.x+96 && y>WELCOME.y-96 && y<WELCOME.y+6) return true;   // 환영 표지판(뒤로 들어가지 못하게)
   for(const l of LAMPS) if(Math.hypot(x-l[0],y-l[1])<7) return true;
   return false;
 }
@@ -745,6 +883,7 @@ function update(dt){
   let dx=0, dy=0;
   if(keys.ArrowLeft||keys.a) dx-=1; if(keys.ArrowRight||keys.d) dx+=1;
   if(keys.ArrowUp||keys.w) dy-=1; if(keys.ArrowDown||keys.s) dy+=1;
+  if((dx||dy||target) && me.act) stand();   // 움직이면 자리에서 일어나요
   if(dx||dy){ target=null; const l=Math.hypot(dx,dy); move(me, dx/l*me.speed*dt, dy/l*me.speed*dt); }
   else if(target){
     const tx=target.x-me.x, ty=target.y-me.y, d=Math.hypot(tx,ty);
@@ -763,12 +902,16 @@ function update(dt){
 
   (net.on ? [] : npcs).forEach(n => {
     if(n.sayT>0) n.sayT-=dt;
+    if(n.act){ n.wait -= dt; if(n.wait<=0){ n.act = null; n.wait = .5; } return; }   // 벤치에 앉아 쉬는 중
     if(n.tx==null){
       if(n.q.length){ const p = n.q.shift(); n.tx = p[0]+(Math.random()-.5)*12; n.ty = p[1]+(Math.random()-.5)*8; }
       else {
         n.wait -= dt;
         if(n.wait<=0){
-          if(n.at==='plaza'){
+          if(n.at==='plaza' && Math.random()<.3){
+            const s = SEATS[Math.floor(Math.random()*2)];   // 광장 벤치 두 곳
+            n.q = [[s.x,s.y+4]]; n.sit = s; n.wait = 1;
+          } else if(n.at==='plaza'){
             const b = BUILDINGS[Math.floor(Math.random()*BUILDINGS.length)];
             n.q = [...b.route, [b.door.x,b.door.y]]; n.at = b;
             if(Math.random()<.5) say(n, NPC_SAYS[Math.floor(Math.random()*NPC_SAYS.length)], 3200);
@@ -780,18 +923,24 @@ function update(dt){
       }
     } else {
       const tx=n.tx-n.x, ty=n.ty-n.y, d=Math.hypot(tx,ty);
-      if(d<8){ n.tx=null; }
+      if(d<8){ n.tx=null;
+        if(n.sit && !n.q.length){ n.x = n.sit.x; n.y = n.sit.y; n.dir = n.sit.dir; n.act = 'sit'; n.wait = 4+Math.random()*6; n.sit = null; } }
       else if(!move(n, tx/d*n.speed*dt, ty/d*n.speed*dt)){
         /* 어딘가에 막혔으면 광장에서 다시 시작해요 */
-        n.q = []; n.tx = null; n.at = 'plaza'; n.wait = 1; n.x = PLAZA.x+(Math.random()-.5)*300; n.y = PLAZA.y+80+Math.random()*30;
+        n.q = []; n.sit = null; n.tx = null; n.at = 'plaza'; n.wait = 1; n.x = PLAZA.x+(Math.random()-.5)*300; n.y = PLAZA.y+80+Math.random()*30;
       }
     }
   });
 
+  stepAct(dt);
   nearB = null;
   for(const b of BUILDINGS){ if(Math.hypot(me.x-b.door.x, me.y-b.door.y)<52){ nearB=b; break; } }
-  $('#enterBtn').classList.toggle('show', !!nearB && !inModal && started);
+  nearI = null;
+  if(!nearB && !me.act){ let best = 1e9; for(const it of INTERACTS){ const d = Math.hypot(me.x-it.x, me.y-it.y); if(d<it.r && d/it.r<best){ best = d/it.r; nearI = it; } } }
+  $('#enterBtn').classList.toggle('show', !!(nearB || nearI || me.act) && !inModal && started);
   if(nearB) $('#enterBtn').textContent = nearB.emoji+' '+nearB.name+' 입장';
+  else if(me.act) $('#enterBtn').textContent = '🧍 일어나기';
+  else if(nearI) $('#enterBtn').textContent = nearI.label;
 
   cam.x += (me.x-cam.x)*Math.min(1,dt*6); cam.y += (me.y-cam.y)*Math.min(1,dt*6);
   $('#online').innerHTML = net.on ? '🟢 접속 중 <b>'+(net.players.size+1)+'</b>명'
@@ -820,6 +969,7 @@ function lightList(t){
   BUILDINGS.forEach(b => { b.wins.forEach(o => L.push({ x:b.x+o.x+o.w/2, y:b.y+o.y+o.h/2, r:58, k:.8 })); L.push({ x:b.x+b.w/2+34, y:b.y+b.h-48, r:46, k:.75 }); });
   L.push({ x:CAMP.x, y:CAMP.y-14, r:165+Math.sin(t*11)*7, k:1 });
   allPledges().forEach(l => L.push({ x:l.x, y:l.y-36, r:58, k:.8 }));
+  L.push({ x:WELCOME.x, y:WELCOME.y-54, r:104, k:.75 });
   L.push({ x:me.x, y:me.y-16, r:76, k:.5 });
   return L;
 }
@@ -851,16 +1001,20 @@ function render(t, dt){
     ctx.save(); ctx.translate(tr.x,tr.y); ctx.rotate(sw); ctx.scale(s,s); ctx.drawImage(sp,-65,-136,130,160); ctx.restore(); }}));
   LAMPS.forEach(l => items.push({ y:l[1], f:() => lamp(ctx,l[0],l[1],tod.n) }));
   items.push({ y:SIGNPOST.y, f:() => ctx.drawImage(signSpr,SIGNPOST.x-85,SIGNPOST.y-158,170,176) });
-  items.push({ y:PLAZA.y+30, f:() => fountain(ctx,t) });
+  items.push({ y:PLAZA.y+4, f:() => fountain(ctx,t) });
+  items.push({ y:WELCOME.y, f:() => ctx.drawImage(welcomeSpr,WELCOME.x-130,WELCOME.y-118,260,130) });
   items.push({ y:CAMP.y+6, f:() => campfire(ctx,t) });
   allPledges().forEach((l,i) => items.push({ y:l.y, f:() => lanternFloat(ctx,l,t,i) }));
+  items.push({ y:PLAY.y+10, f:() => swingSet(ctx,t) });
   const people = net.on ? [...net.players.values()] : npcs;
-  people.forEach(n => items.push({ y:n.y, f:() => person(ctx,n,n.x,n.y,false) }));
-  items.push({ y:me.y, f:() => { ctx.strokeStyle = '#ff9b3d'; ctx.lineWidth = 2.2; ell(ctx,me.x,me.y+2,14,5.4); ctx.stroke(); person(ctx,me,me.x,me.y,false); } });
+  const onSwing = p => !!p.act && p.act.startsWith('swing');   // 그네 탄 사람은 그네와 함께 그려요
+  people.forEach(n => { if(!onSwing(n)) items.push({ y:n.y, f:() => person(ctx,n,n.x,n.y,false) }); });
+  if(!onSwing(me)) items.push({ y:me.y, f:() => { if(!me.act){ ctx.strokeStyle = '#ff9b3d'; ctx.lineWidth = 2.2; ell(ctx,me.x,me.y+2,14,5.4); ctx.stroke(); } person(ctx,me,me.x,me.y,false); } });
   items.sort((a,b) => a.y-b.y).forEach(i => i.f());
   /* 연기·불똥·나비·꽃잎·새 */
   smoke.forEach(p => { ctx.fillStyle = 'rgba(245,242,235,'+Math.max(0,p.a)+')'; circ(ctx,p.x,p.y,p.r); ctx.fill(); });
   drawFlyers(ctx,t,tod.n);
+  drawActFx(ctx,t);
   if(target){ ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ell(ctx,target.x,target.y,10+Math.sin(t*8)*2,4.5); ctx.stroke(); }
   /* 노을빛, 밤의 어둠(불빛이 있는 곳만 밝게) */
   if(tod.warm>.01){ ctx.fillStyle = 'rgba(255,140,64,'+(.2*tod.warm)+')'; ctx.fillRect(0,0,W,H); }
@@ -879,9 +1033,10 @@ function render(t, dt){
   } else {
     ctx.globalCompositeOperation = 'lighter'; sparks.forEach(p => { ctx.fillStyle = 'rgba(255,170,70,'+Math.max(0,1-p.life/1.3)*.8+')'; circ(ctx,p.x,p.y,1.4); ctx.fill(); }); ctx.globalCompositeOperation = 'source-over';
   }
+  drawFw(ctx);   // 폭죽은 어둠 위에서 더 밝게
   /* 이름표·말풍선은 어둠 위에 */
-  people.forEach(n => { tag(ctx,n,n.x,n.y,false); if(n.sayT>0) bubble(ctx,n.say,n.x,n.y-34); });
-  tag(ctx,me,me.x,me.y,true); if(me.sayT>0) bubble(ctx,me.say,me.x,me.y-34);
+  people.forEach(n => { const v = visPos(n,t); tag(ctx,n,v.x,v.y,false); if(n.sayT>0) bubble(ctx,n.say,v.x,v.y-34); });
+  { const v = visPos(me,t); tag(ctx,me,v.x,v.y,true); if(me.sayT>0) bubble(ctx,me.say,v.x,v.y-34); }
   /* 겹쳐 있어도 가장 가까운 등불 하나만 보여줘요 */
   let near = null, nd = 70;
   allPledges().forEach(l => { const d = Math.hypot(me.x-l.x,me.y-l.y); if(d<nd){ nd=d; near=l; } });
@@ -907,7 +1062,8 @@ addEventListener('keydown', e => {
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   if(!started) return;
   if(e.key==='Escape') closeModal();
-  if(k==='e' && nearB && !inModal) openBuilding(nearB);
+  if(k==='e') actKey();
+  if(k>='1' && k<='5' && !inModal) emote(+k-1);
   if(e.key==='Enter' && !inModal){ e.preventDefault(); $('#chat').focus(); }
   if(k==='f') salute();
 });
@@ -951,13 +1107,17 @@ $('#todBtn').onclick = () => {
   store.set('hv_tod', todMode); $('#todBtn').textContent = TOD_LABEL[todMode];
   toast(todMode==='auto' ? '실제 시간에 맞춰 하루가 흘러가요' : TOD_LABEL[todMode]+'으로 바꿨어요');
 };
-$('#enterBtn').onclick = () => nearB && openBuilding(nearB);
+$('#enterBtn').onclick = actKey;
 $('#helpBtn').onclick = () => openCard(`
   <header><div class="ico" style="background:var(--paper2)">❓</div><div><h2>이용 방법</h2><p>복귀마을 프로토타입</p></div><button class="x" onclick="window.__close()">×</button></header>
   <div class="body">
     <div class="tip"><i>🚶</i><span>방향키·WASD로 이동하거나, 바닥을 클릭/탭하면 그곳으로 걸어가요.</span></div>
     <div class="tip"><i>🏠</i><span>건물 입구에 가까이 가면 <b>입장</b> 버튼(또는 E)이 나타나요.</span></div>
     <div class="tip"><i>🫡</i><span>경례(F)로 근처 주민에게 인사해요.</span></div>
+    <div class="tip"><i>🪑</i><span>벤치·통나무 앞에서 E를 누르면 앉아요. 움직이면 일어나요.</span></div>
+    <div class="tip"><i>🎠</i><span>놀이터(오른쪽 아래 모닥불 위)에서 그네를 탈 수 있어요.</span></div>
+    <div class="tip"><i>🪙</i><span>분수 근처에서 E로 소원을 빌고, 표지판 앞에서 E로 축하 폭죽을 터뜨려요.</span></div>
+    <div class="tip"><i>😄</i><span>숫자 1~5로 감정을 표현해요 (😄 👏 💪 😭 🫡).</span></div>
     <div class="tip"><i>🏮</i><span>오늘의 다짐을 적으면 광장에 내 등불이 걸려요. 등불 가까이 가면 내용이 보여요.</span></div>
     <p class="note">※ 주민(NPC)과 선배 경험담은 모두 예시입니다. 내가 쓴 글은 이 브라우저에만 저장돼요.</p>
   </div>`);
