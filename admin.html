@@ -48,6 +48,7 @@
       <span id="counts" style="font-size:12px;color:#7a7a66"></span>
     </div>
     <p style="font-size:12.5px;color:#7a7a66;margin:0 0 4px">신고가 있거나 가려진 항목이 맨 위에 와요. 삭제는 되돌릴 수 없어요. 가려진 글은 "복구"로 다시 보이게 할 수 있어요.</p>
+    <div id="stats"></div>
     <div id="flagged"></div>
     <div id="all"></div>
     <div id="chat"></div>
@@ -86,6 +87,15 @@ async function load(){
       p.comments.forEach(c => { if (c.reports || c.hidden) flagged.push(card('c', b, p, c)); });
       all.push(`<div>${card('p', b, p)}${p.comments.map(c => `<div class="cm">${card('c', b, p, c)}</div>`).join('')}</div>`);
     }
+    const S = d.stats, fmtT = t => new Date(t).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const dur = s => s >= 3600 ? Math.floor(s / 3600) + '시간 ' + Math.floor(s % 3600 / 60) + '분' : s >= 60 ? Math.floor(s / 60) + '분 ' + (s % 60) + '초' : s + '초';
+    const tile = (n, l) => `<div style="flex:1 1 120px;background:#fff;border:1px solid #d6cdb4;border-radius:12px;padding:10px 12px"><div style="font-size:22px;font-weight:800;color:#43502a">${n}</div><div style="font-size:12px;color:#7a7a66">${l}</div></div>`;
+    $('#stats').innerHTML = '<h2>📊 방문 현황</h2><div style="display:flex;gap:8px;flex-wrap:wrap">' + tile(S.today.v + '명', '오늘 방문자') + tile(S.today.n + '번', '오늘 접속 횟수') + tile(S.today.peak + '명', '오늘 최대 동시 접속') + tile(S.online.length + '명', '지금 접속 중') + tile(S.total + '명', '누적 방문자') + '</div>'
+      + '<p style="font-size:12px;color:#7a7a66;margin:6px 0">방문자는 브라우저 기준이에요. 같은 사람이 다른 기기·브라우저로 오거나 저장 데이터를 지우면 따로 세어져요. 연결이 끊겼다 이어지면 접속 횟수가 늘어요. 날짜는 한국 시간 기준이에요.</p>'
+      + '<h2>🟢 지금 접속 중</h2>' + (S.online.map(o => `<div class="card"><div class="meta"><b>${esc(o.name)}</b><span class="b">${esc(o.ip)}</span><span>${fmtT(o.since)}부터</span></div></div>`).join('') || '<div class="empty">아무도 없어요</div>')
+      + '<h2>📅 하루별 방문(최근 14일)</h2><div class="card" style="padding:4px 12px"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="color:#7a7a66;text-align:left"><th style="padding:6px 0">날짜</th><th>방문자</th><th>접속 횟수</th><th>최대 동시</th></tr>'
+      + (S.days.map(x => `<tr style="border-top:1px solid #eee6d0"><td style="padding:6px 0">${esc(x.d)}</td><td>${x.v}명</td><td>${x.n}번</td><td>${x.peak}명</td></tr>`).join('') || '<tr><td colspan="4" class="empty">아직 기록이 없어요</td></tr>') + '</table></div>'
+      + '<h2>🚪 들어오고 나간 기록(최근 200건, 30일 보관)</h2>' + (S.visits.map(v => `<div class="card" style="padding:7px 12px"><div class="meta" style="margin:0"><span class="r" style="background:${v.ev === 'in' ? '#5d6b3a' : '#7a7a66'}">${v.ev === 'in' ? '입장' : '퇴장'}</span><b>${esc(v.name)}</b><span>${fmtT(v.t)}</span><span class="b">${esc(v.ip)}</span>${v.ev === 'out' ? `<span>머문 시간 ${dur(v.dur)}</span>` : ''}</div></div>`).join('') || '<div class="empty">아직 기록이 없어요</div>');
     $('#flagged').innerHTML = `<h2>🚩 신고·가려진 항목 (${flagged.length})</h2>` + (flagged.join('') || '<div class="empty">없어요</div>');
     $('#all').innerHTML = '<h2>📝 모든 글(건물별 최근 200개, 최신순)</h2>' + (all.join('') || '<div class="empty">아직 글이 없어요</div>');
     const fmt = t => new Date(t).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });

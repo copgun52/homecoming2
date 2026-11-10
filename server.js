@@ -43,6 +43,28 @@ if (!Array.isArray(db.chat)) db.chat = [];
 db.nextChatId = db.nextChatId || 1;
 const pruneChat = () => { const old = Date.now() - CHAT_DAYS * 86400000; let i = 0; while (i < db.chat.length && db.chat[i].t < old) i++; if (i) db.chat.splice(0, i); if (db.chat.length > CHAT_KEEP) db.chat.splice(0, db.chat.length - CHAT_KEEP); };
 pruneChat(); setInterval(pruneChat, 6 * 3600 * 1000).unref();
+/* 방문 기록: 누가 들어오고 나갔는지(visits, 30일), 하루별 방문자 수(stats.days), 전체 방문자(stats.total).
+   방문자는 브라우저 고유 번호를 해시한 값으로 세요(원래 번호는 저장하지 않아요). 같은 사람이 다른 브라우저로 오면 따로 세어져요. */
+if (!Array.isArray(db.visits)) db.visits = [];
+db.nextVisitId = db.nextVisitId || 1;
+db.stats = db.stats || {}; if (!Array.isArray(db.stats.total)) db.stats.total = []; db.stats.days = db.stats.days || {};
+const VISIT_KEEP = 3000, DAYS_KEEP = 400;
+const seenAll = new Set(db.stats.total), seenDay = new Map();
+const kstDay = t => new Date(t + 9 * 3600000).toISOString().slice(0, 10);
+const daySet = d => { if (!seenDay.has(d)) seenDay.set(d, new Set((db.stats.days[d] && db.stats.days[d].v) || [])); return seenDay.get(d); };
+function logVisit(ev, p, now, dur) {
+  const vk = crypto.createHash('sha256').update('v|' + p.uid).digest('hex').slice(0, 10), d = kstDay(now);
+  const day = db.stats.days[d] = db.stats.days[d] || { v: [], n: 0, peak: 0 };
+  if (ev === 'in') {
+    day.n++; day.peak = Math.max(day.peak || 0, players.size);
+    if (!daySet(d).has(vk)) { daySet(d).add(vk); day.v.push(vk); }
+    if (!seenAll.has(vk)) { seenAll.add(vk); db.stats.total.push(vk); }
+  }
+  db.visits.push({ id: db.nextVisitId++, t: now, ev, name: p.name, ip: p.ipk, vk: vk.slice(0, 6), dur: dur || 0 });
+  const old = now - 30 * 86400000; while (db.visits.length && (db.visits[0].t < old || db.visits.length > VISIT_KEEP)) db.visits.shift();
+  const keys = Object.keys(db.stats.days).sort(); while (keys.length > DAYS_KEEP) { const k = keys.shift(); delete db.stats.days[k]; seenDay.delete(k); }
+  save();
+}
 BUILDING_IDS.forEach(id => db.posts[id].forEach(p => {
   if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; if (!Array.isArray(p.comments)) p.comments = []; if (!Array.isArray(p.reports)) p.reports = [];
   p.comments.forEach(c => { if (!c.id) c.id = db.nextPostId++; if (!Array.isArray(c.reports)) c.reports = []; });
@@ -128,7 +150,11 @@ function adminApi(req, res, ip, url) {
         out[b] = db.posts[b].slice(-200).map(p => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, reports: p.reports.length, hidden: !!p.hidden,
           comments: p.comments.slice(-100).map(c => ({ id: c.id, name: c.name, text: c.text, date: c.date, reports: c.reports.length, hidden: !!c.hidden })) })).reverse();
       });
-      return json(200, { chat: db.chat.slice(-300).reverse().map(c => ({ id: c.id, t: c.t, name: c.name, text: c.text, ip: String(c.ip || '').slice(0, 6) })), posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
+      const today = kstDay(Date.now()), td = db.stats.days[today] || { v: [], n: 0, peak: 0 };
+      const stats = { today: { v: td.v.length, n: td.n, peak: td.peak || 0 }, total: db.stats.total.length, online: [...players.values()].map(p => ({ name: p.name, ip: String(p.ipk).slice(0, 6), since: p.joinedAt })),
+        days: Object.keys(db.stats.days).sort().slice(-14).reverse().map(k => ({ d: k, v: db.stats.days[k].v.length, n: db.stats.days[k].n, peak: db.stats.days[k].peak || 0 })),
+        visits: db.visits.slice(-200).reverse().map(v => ({ t: v.t, ev: v.ev, name: v.name, ip: String(v.ip).slice(0, 6), vk: v.vk, dur: v.dur })) };
+      return json(200, { stats, chat: db.chat.slice(-300).reverse().map(c => ({ id: c.id, t: c.t, name: c.name, text: c.text, ip: String(c.ip || '').slice(0, 6) })), posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
         counts: { posts: BUILDING_IDS.reduce((n, b) => n + db.posts[b].length, 0), pledges: db.pledges.length, chat: db.chat.length } });
     }
     if (url === '/api/admin/delete' || url === '/api/admin/restore') {
@@ -219,8 +245,9 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'join' && !me.joined) {
       me.joined = true; me.name = str(m.name, 8) || '새내기'; me.uni = color(m.uni); me.cap = color(m.cap);
       me.x = num(m.x, 0, W, 700); me.y = num(m.y, 0, H, 560);
-      players.set(ws, me);
+      players.set(ws, me); me.joinedAt = now;
       me.uid = typeof m.uid === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.uid) ? m.uid : 'conn-' + me.id; // 브라우저 고유 번호(좋아요 1회 제한용)
+      logVisit('in', me, now);
       const recent = {}; BUILDING_IDS.forEach(id => { recent[id] = postsFor(id, me.uid); });
       send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: db.pledges.slice(-SHOW_PLEDGES), posts: recent });
       broadcast({ t: 'join', p: pub(me) }, ws);
@@ -301,7 +328,7 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('close', () => { if (players.delete(ws)) broadcast({ t: 'leave', id: me.id }); });
+  ws.on('close', () => { if (players.delete(ws)) { broadcast({ t: 'leave', id: me.id }); const t = Date.now(); logVisit('out', me, t, Math.round((t - (me.joinedAt || t)) / 1000)); } });
   ws.on('error', () => {});
 });
 
