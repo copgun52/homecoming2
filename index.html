@@ -208,28 +208,28 @@ const PLAY = { x:1250, y:445 };     // 놀이터(그네)
 const SWINGS = [ { id:'swing0', ax:PLAY.x-36, ay:PLAY.y-70, L:56, ph:0 }, { id:'swing1', ax:PLAY.x+36, ay:PLAY.y-70, L:56, ph:1.7 } ];
 /* 위 세 건물은 윗길(y=330)에, 아래 세 건물은 아랫길(y=900)에 문이 닿아요. route는 광장에서 문 앞까지 가는 길목(주민이 따라 걸어요) */
 const BUILDINGS = [
-  { id:'job', theme:'office', name:'취업 지원본부', emoji:'💼', x:130, y:110, w:240, h:150, wall:'#d9cfa3', roof:'#56673a', trim:'#3c4a28',
+  { id:'job', theme:'office', name:'취업관', emoji:'💼', x:130, y:110, w:240, h:150, wall:'#d9cfa3', roof:'#56673a', trim:'#3c4a28',
     route:[[520,430],[520,330],[250,330]],
     desc:'공채·수시채용, 이력서, 면접 준비',
     example:'이력서에 군 경력을 어떻게 써야 할지 막막해요. 직무와 연결해서 써 보신 분, 방법 좀 알려 주세요.' },
-  { id:'cert', theme:'library', name:'자격증 교육대', emoji:'📚', x:680, y:110, w:240, h:150, wall:'#d6c697', roof:'#6b6a3a', trim:'#47461f',
+  { id:'cert', theme:'library', name:'자격증 도서관', emoji:'📚', x:680, y:110, w:240, h:150, wall:'#d6c697', roof:'#6b6a3a', trim:'#47461f',
     route:[[930,470],[800,400],[800,330]],
     desc:'자격증·어학·공시 준비 스터디',
     example:'전역하고 첫 자격증으로 뭘 준비하셨나요? 목표 직무가 아직 없을 때 어떤 기준으로 골랐는지 궁금해요.' },
-  { id:'soon', theme:'calendar', name:'전역 준비 막사', emoji:'📅', x:1230, y:110, w:240, h:150, wall:'#dccf9f', roof:'#44624a', trim:'#2e4533',
+  { id:'soon', theme:'calendar', name:'전역 준비관', emoji:'📅', x:1230, y:110, w:240, h:150, wall:'#dccf9f', roof:'#44624a', trim:'#2e4533',
     route:[[1080,430],[1080,330],[1350,330]],
     cta:'전역 준비 이야기 남기기', ph:'전역까지 남은 기간, 고민, 준비 중인 것을 남겨 보세요',
     desc:'곧 전역하는 사람들을 위한 준비 공간',
     example:'전역 D-30인데 뭘 준비해야 할지 모르겠어요. 먼저 전역하신 분들은 이 시기에 뭘 하셨나요?' },
-  { id:'trip', theme:'travel', name:'휴가 센터', emoji:'🧳', x:130, y:680, w:240, h:150, wall:'#e0d3a8', roof:'#4a5f6b', trim:'#33444e',
+  { id:'trip', theme:'travel', name:'여행사', emoji:'🧳', x:130, y:680, w:240, h:150, wall:'#e0d3a8', roof:'#4a5f6b', trim:'#33444e',
     route:[[520,600],[520,900],[250,900]],
     desc:'여행, 워킹홀리데이, 해외 경험',
     example:'전역하고 첫 여행을 다녀오신 분 계신가요? 예산은 어떻게 잡으셨는지 궁금해요.' },
-  { id:'rest', theme:'cafe', name:'충성마트 쉼터', emoji:'🍵', x:680, y:680, w:240, h:150, wall:'#e2d6a8', roof:'#7a7a3e', trim:'#55551f',
+  { id:'rest', theme:'cafe', name:'쉼터', emoji:'🍵', x:680, y:680, w:240, h:150, wall:'#e2d6a8', roof:'#7a7a3e', trim:'#55551f',
     route:[[520,600],[520,900],[800,900]],
     desc:'막막할 때, 마음 이야기',
     example:'전역하고 나니 괜히 불안하고 막막한 날이 많아요. 여러분은 그런 날 어떻게 보내세요?' },
-  { id:'story', theme:'cabin', name:'내무반 썰방', emoji:'🔥', x:1230, y:680, w:240, h:150, wall:'#b59a66', roof:'#6a4d33', trim:'#46321f',
+  { id:'story', theme:'cabin', name:'군대 썰방', emoji:'🔥', x:1230, y:680, w:240, h:150, wall:'#b59a66', roof:'#6a4d33', trim:'#46321f',
     route:[[1080,600],[1080,900],[1350,900]],
     desc:'군대에서 있었던 일, 웃긴 썰·힘들었던 썰 풀기',
     cta:'썰 풀기', ph:'그때 있었던 일, 지금 돌아보니 어떤가요?',
@@ -306,7 +306,7 @@ let inModal = false, started = false;
 
 /* NPC: 프로토타입용 가짜 주민 */
 const NPC_NAMES = ['취준생민수','복학생J','자격증러','예비창업가','말년휴가','전역D-3','공시생하나'];
-const NPC_SAYS = ['🫡','오늘 뭐하지…','같이 스터디할 사람?','토익 접수했다','나만 막막한 거 아니었네','PX 가서 쉴까','일단 산책!','이력서 쓰다 왔어요'];
+const NPC_SAYS = ['🫡','오늘 뭐하지…','같이 스터디할 사람?','토익 접수했다','나만 막막한 거 아니었네','쉼터 가서 쉴까','일단 산책!','이력서 쓰다 왔어요'];
 const npcs = NPC_NAMES.map((n,i) => ({
   name:n, uni:COLORS_UNI[i%6], cap:COLORS_CAP[(i*2+1)%6],
   x:PLAZA.x+(Math.random()<.5?-1:1)*(110+Math.random()*130), y:PLAZA.y+84+Math.random()*30, dir:1, step:Math.random()*9, say:'', sayT:0, speed:62+Math.random()*30,
@@ -748,7 +748,7 @@ function buildWelcome(){
   const line = (txt, y, size, col) => { fitText(g,txt,176,size); g.lineWidth = 3.2; g.strokeStyle = 'rgba(80,44,14,.85)'; g.strokeText(txt,0,y); g.fillStyle = col; g.fillText(txt,0,y); };
   line('🪖 복귀 신고합니다!', -64, 15, '#fff6dc');
   line('충성! 복귀마을', -42, 20, '#ffe08a');
-  line('막사에 들어가 글을 남겨요 🫡', -26.5, 10.5, '#fff6dc');
+  line('건물에 들어가 글을 남겨요 🫡', -26.5, 10.5, '#fff6dc');
   return c;
 }
 let bgCv = null, treeSpr = [], signSpr = null, welcomeSpr = null;
