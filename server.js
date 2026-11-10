@@ -16,12 +16,13 @@ const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보�
 const KEEP_COMMENTS = 300, SHOW_COMMENTS = 30;  // 글 하나당 댓글: 보관 최대 / 화면에 보내는 최근 개수
 const W = 1600, H = 1000;                       // 마을 크기(화면과 같아야 해요)
 const ADMIN_KEY = process.env.ADMIN_KEY || '';  // 운영자 비밀번호. 없으면 운영자 기능은 꺼져 있어요
+const CHAT_KEEP = 5000, CHAT_DAYS = 30;          // 채팅 기록: 최대 개수 / 보관 일수(오래된 것은 자동으로 지워요)
 const HIDE_AT = 5;                              // 서로 다른 사람 5명이 신고하면 일단 가려요(운영자가 확인)
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');   // 링크 미리보기에 쓰는 주소(없으면 접속한 주소)
 
 /* ---------- 저장되는 데이터: 등불, 건물별 글 ---------- */
 fs.mkdirSync(DATA_DIR, { recursive: true });
-let db = { pledges: [], posts: {} };
+let db = { pledges: [], posts: {}, chat: [] };
 /* 읽기: 파일이 없으면 새로 시작. 완전히 빈 파일(0바이트)이면 가장 최근의 멀쩡한 백업으로 복구하고, 없으면 새로 시작해요.
    내용은 있는데 깨져 있으면 덮어써서 날리지 않도록 멈춰요. */
 const readJson = f => { const t = fs.readFileSync(f, 'utf8'); return t.trim() ? JSON.parse(t) : null; };
@@ -37,6 +38,11 @@ try {
 BUILDING_IDS.forEach(id => { db.posts[id] = db.posts[id] || []; });
 /* 글마다 번호(id)와 좋아요 누른 사람 목록(likes)이 있어요. 번호가 없는 예전 글에는 번호를 붙여요. */
 db.nextPostId = db.nextPostId || 1;
+/* 채팅 기록: { id, t(밀리초), name, text, ip(접속 주소를 해시한 짧은 값) }. 오래된 기록은 정리해요 */
+if (!Array.isArray(db.chat)) db.chat = [];
+db.nextChatId = db.nextChatId || 1;
+const pruneChat = () => { const old = Date.now() - CHAT_DAYS * 86400000; let i = 0; while (i < db.chat.length && db.chat[i].t < old) i++; if (i) db.chat.splice(0, i); if (db.chat.length > CHAT_KEEP) db.chat.splice(0, db.chat.length - CHAT_KEEP); };
+pruneChat(); setInterval(pruneChat, 6 * 3600 * 1000).unref();
 BUILDING_IDS.forEach(id => db.posts[id].forEach(p => {
   if (!p.id) p.id = db.nextPostId++; if (!Array.isArray(p.likes)) p.likes = []; if (!Array.isArray(p.comments)) p.comments = []; if (!Array.isArray(p.reports)) p.reports = [];
   p.comments.forEach(c => { if (!c.id) c.id = db.nextPostId++; if (!Array.isArray(c.reports)) c.reports = []; });
@@ -122,8 +128,8 @@ function adminApi(req, res, ip, url) {
         out[b] = db.posts[b].slice(-200).map(p => ({ id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, reports: p.reports.length, hidden: !!p.hidden,
           comments: p.comments.slice(-100).map(c => ({ id: c.id, name: c.name, text: c.text, date: c.date, reports: c.reports.length, hidden: !!c.hidden })) })).reverse();
       });
-      return json(200, { posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
-        counts: { posts: BUILDING_IDS.reduce((n, b) => n + db.posts[b].length, 0), pledges: db.pledges.length } });
+      return json(200, { chat: db.chat.slice(-300).reverse().map(c => ({ id: c.id, t: c.t, name: c.name, text: c.text, ip: String(c.ip || '').slice(0, 6) })), posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
+        counts: { posts: BUILDING_IDS.reduce((n, b) => n + db.posts[b].length, 0), pledges: db.pledges.length, chat: db.chat.length } });
     }
     if (url === '/api/admin/delete' || url === '/api/admin/restore') {
       const post = findPost(m.b, m.id); if (!post) return json(404, { error: '글을 찾지 못했어요' });
@@ -133,6 +139,12 @@ function adminApi(req, res, ip, url) {
       if (cid) post.comments = post.comments.filter(c => c.id !== cid); else db.posts[m.b] = db.posts[m.b].filter(p => p.id !== post.id);
       save(); broadcast({ t: 'del', b: m.b, id: post.id, cid });
       console.log('[운영자] 삭제', m.b, post.id, cid || '');
+      return json(200, { ok: true });
+    }
+    if (url === '/api/admin/delchat') {
+      const i = db.chat.findIndex(c => c.id === Number(m.id));
+      if (i < 0) return json(404, { error: '이미 지워졌어요. 목록을 새로고침해 주세요' });
+      db.chat.splice(i, 1); save(); console.log('[운영자] 채팅 삭제', m.id);
       return json(200, { ok: true });
     }
     if (url === '/api/admin/delpledge') {
@@ -232,6 +244,7 @@ wss.on('connection', (ws, req) => {
       if (now - me.last < 400) return; me.last = now;
       const text = str(m.text, 40); if (!text) return;
       broadcast({ t: 'say', id: me.id, text }, ws);
+      db.chat.push({ id: db.nextChatId++, t: now, name: me.name, text, ip: me.ipk }); if (db.chat.length > CHAT_KEEP) db.chat.shift(); save();
     } else if (m.t === 'pledge') {
       if (now - me.last < 1500) return; me.last = now;
       const text = str(m.text, 30); if (!text) return;

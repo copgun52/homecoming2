@@ -50,6 +50,7 @@
     <p style="font-size:12.5px;color:#7a7a66;margin:0 0 4px">신고가 있거나 가려진 항목이 맨 위에 와요. 삭제는 되돌릴 수 없어요. 가려진 글은 "복구"로 다시 보이게 할 수 있어요.</p>
     <div id="flagged"></div>
     <div id="all"></div>
+    <div id="chat"></div>
     <div id="pledges"></div>
   </div>
 </div>
@@ -78,7 +79,7 @@ async function load(){
   try {
     const d = await (await api('/api/admin/list', {})).json();
     $('#login').style.display = 'none'; $('#panel').style.display = 'block';
-    $('#counts').textContent = `글 ${d.counts.posts}개 · 다짐 ${d.counts.pledges}개`;
+    $('#counts').textContent = `글 ${d.counts.posts}개 · 다짐 ${d.counts.pledges}개 · 채팅 ${d.counts.chat}줄`;
     const flagged = [], all = [];
     for (const b of Object.keys(d.posts)) for (const p of d.posts[b]) {
       if (p.reports || p.hidden) flagged.push(card('p', b, p));
@@ -87,6 +88,8 @@ async function load(){
     }
     $('#flagged').innerHTML = `<h2>🚩 신고·가려진 항목 (${flagged.length})</h2>` + (flagged.join('') || '<div class="empty">없어요</div>');
     $('#all').innerHTML = '<h2>📝 모든 글(건물별 최근 200개, 최신순)</h2>' + (all.join('') || '<div class="empty">아직 글이 없어요</div>');
+    const fmt = t => new Date(t).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    $('#chat').innerHTML = '<h2>💬 채팅 기록(최근 300줄, 최신순 · 30일 보관)</h2><p style="font-size:12px;color:#7a7a66;margin:0 0 6px">같은 괄호 번호는 같은 접속 주소에서 보낸 거예요. 이름은 누구나 바꿀 수 있어요.</p>' + (d.chat.map(c => `<div class="card"><div class="meta"><b>${esc(c.name)}</b><span>${fmt(c.t)}</span><span class="b">${esc(c.ip)}</span></div><div class="txt">${esc(c.text)}</div><div class="act"><button class="del" data-op="delchat" data-id="${c.id}">삭제</button></div></div>`).join('') || '<div class="empty">아직 채팅이 없어요</div>');
     $('#pledges').innerHTML = '<h2>🏮 오늘의 다짐(최근 100개)</h2>' + (d.pledges.map(p => `<div class="card"><div class="meta"><b>${esc(p.name)}</b></div><div class="txt">${esc(p.text)}</div><div class="act"><button class="del" data-op="delpledge" data-i="${p.i}" data-text="${esc(p.text)}">삭제</button></div></div>`).join('') || '<div class="empty">없어요</div>');
     try { sessionStorage.setItem('hv_adm', KEY); } catch (e) {}
   } catch (e) { say(e.message, true); if (!$('#panel').style.display || $('#panel').style.display === 'none') $('#login').style.display = 'flex'; }
@@ -106,7 +109,7 @@ document.addEventListener('click', async e => {
   if (op === 'delete' && !confirm('정말 삭제할까요? 되돌릴 수 없어요.')) return;
   t.disabled = true;
   try {
-    const body = op === 'delpledge' ? { i: Number(t.dataset.i), text: t.dataset.text } : { b: t.dataset.b, id: Number(t.dataset.id), cid: t.dataset.cid ? Number(t.dataset.cid) : undefined };
+    const body = op === 'delchat' ? { id: Number(t.dataset.id) } : op === 'delpledge' ? { i: Number(t.dataset.i), text: t.dataset.text } : { b: t.dataset.b, id: Number(t.dataset.id), cid: t.dataset.cid ? Number(t.dataset.cid) : undefined };
     await api('/api/admin/' + op, body); await load();
   } catch (x) { say(x.message, true); t.disabled = false; }
 });
