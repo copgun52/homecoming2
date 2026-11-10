@@ -41,6 +41,12 @@
   .chip{background:rgba(250,244,228,.94);border:1px solid #d9c9a0;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600;box-shadow:0 2px 0 #d9c9a0,0 5px 12px rgba(40,30,10,.22);color:var(--ink)}
   button.chip{pointer-events:auto}
   button.chip:hover{background:#fff6dc}
+  .plist{position:fixed;left:12px;top:56px;width:min(260px,80vw);max-height:min(60vh,420px);overflow-y:auto;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 0 var(--line),0 8px 20px rgba(0,0,0,.28);padding:8px 6px;z-index:6;display:none}
+  .plist.show{display:block}
+  .plist h4{margin:2px 8px 6px;font-size:12px;color:var(--muted);font-weight:600}
+  .plist div.row{padding:6px 10px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink);display:flex;gap:8px;align-items:center}
+  .plist div.row.me{background:#e8efd4}
+  .plist div.row i{font-style:normal;font-size:11px;color:var(--muted);font-weight:400;margin-left:auto}
   .chip b,.start h1,.card header h2,.card .body h3{font-family:"Jua","Pretendard","Malgun Gothic",sans-serif;font-weight:400}
   .chip b{font-size:15px}
   .chip b{color:var(--olive-d)}
@@ -147,7 +153,7 @@
 <div class="hud">
   <div class="chip">🪖➡️🙂 <b>복귀마을</b></div>
   <div class="chip" id="dday" style="display:none"></div>
-  <div class="chip" id="online">마을 주민 <b>0</b>명</div>
+  <button class="chip" id="online" title="접속 중인 사람 보기">마을 주민 <b>0</b>명</button>
   <button class="chip" id="todBtn" title="하루 시간대 바꾸기">🕒 자동</button>
 </div>
 <div class="hint">방향키 / WASD 이동 · 바닥 클릭·탭으로 이동<br>건물 앞·벤치·그네 앞에서 E 또는 버튼<br>Enter로 채팅 · 1~5 감정 표현 (😄 👏 💪 😭 🫡)</div>
@@ -157,6 +163,7 @@
   <button id="zoomOut" aria-label="축소">－</button>
   <button id="zoomFit" aria-label="기본 크기" title="기본 크기">기본</button>
 </div>
+<div class="plist" id="plist"></div>
 <button class="enter" id="enterBtn">입장</button>
 <div id="log"></div>
 <div class="bar">
@@ -1077,9 +1084,22 @@ function update(dt){
   else if(nearI) $('#enterBtn').textContent = nearI.label;
 
   cam.x += (me.x-cam.x)*Math.min(1,dt*6); cam.y += (me.y-cam.y)*Math.min(1,dt*6);
-  $('#online').innerHTML = net.on ? '🟢 접속 중 <b>'+(net.players.size+1)+'</b>명'
+  const onl = net.on ? '🟢 접속 중 <b>'+(net.players.size+1)+'</b>명'
     : '마을 주민 <b>'+(npcs.length+1)+'</b>명 <span style="font-weight:400;color:var(--muted)">(예시 · 오프라인)</span>';
+  if(onl !== onlLast){ onlLast = onl; $('#online').innerHTML = onl; }
+  if($('#plist').classList.contains('show')) renderPlist();
 }
+let onlLast = '', plistLast = '';
+/* 접속 중인 사람 목록 (접속 칸을 누르면 열려요) */
+function renderPlist(){
+  const others = (net.on ? [...net.players.values()] : npcs).map(p => p.name || '이름 없음');
+  const html = '<h4>'+(net.on ? '지금 접속 중' : '마을 주민 (예시)')+' · '+(others.length+1)+'명</h4>'
+    + '<div class="row me">🫡 '+esc(me.name || '나')+' <i>나</i></div>'
+    + others.sort((a,b) => a.localeCompare(b,'ko')).map(n => '<div class="row">🪖 '+esc(n)+'</div>').join('');
+  if(html !== plistLast){ plistLast = html; $('#plist').innerHTML = html; }
+}
+$('#online').onclick = e => { e.stopPropagation(); const el = $('#plist'); el.classList.toggle('show'); if(el.classList.contains('show')) renderPlist(); };
+document.addEventListener('pointerdown', e => { if(!e.target.closest('#plist') && !e.target.closest('#online')) $('#plist').classList.remove('show'); });
 
 /* ---------- 시간대(낮·노을·밤) ---------- */
 let todMode = store.get('hv_tod', 'auto');
@@ -1197,7 +1217,7 @@ requestAnimationFrame(loop);
 
 /* ---------- input ---------- */
 addEventListener('keydown', e => {
-  if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){ if(e.key==='Escape') closeModal(); return; }
+  if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){ if(e.key==='Escape'){ closeModal(); $('#plist').classList.remove('show'); } return; }
   const k = e.key.length===1 ? e.key.toLowerCase() : e.key; keys[k]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   if(!started) return;
