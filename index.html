@@ -751,8 +751,26 @@ function buildWelcome(){
   line('건물에 들어가 글을 남겨요 🫡', -26.5, 10.5, '#fff6dc');
   return c;
 }
-let bgCv = null, treeSpr = [], signSpr = null, welcomeSpr = null;
-function buildAll(){ BUILDINGS.forEach(buildSprite); treeSpr = [0,1,2].map(treeSprite); signSpr = buildSign(); welcomeSpr = buildWelcome(); bgCv = buildBg(); }
+const MARGIN = 280;   // 마을 바깥 숲(카메라가 더 내려가고 올라갈 수 있는 여백)
+let bgCv = null, outCv = null, treeSpr = [], signSpr = null, welcomeSpr = null;
+function buildOuter(){
+  const c = document.createElement('canvas'); c.width = W+MARGIN*2; c.height = H+MARGIN*2; const g = c.getContext('2d'), R = mulberry(5150);
+  g.translate(MARGIN,MARGIN);
+  const gr = g.createLinearGradient(0,-MARGIN,0,H+MARGIN); gr.addColorStop(0,'#587436'); gr.addColorStop(1,'#4d6a30'); g.fillStyle = gr; g.fillRect(-MARGIN,-MARGIN,W+MARGIN*2,H+MARGIN*2);
+  for(let i=0;i<420;i++){ const x = -MARGIN+R()*(W+MARGIN*2), y = -MARGIN+R()*(H+MARGIN*2), r = 24+R()*70; g.fillStyle = R()<.5 ? 'rgba(52,80,34,.28)' : 'rgba(150,170,90,.12)'; g.beginPath(); g.ellipse(x,y,r,r*.55,0,0,7); g.fill(); }
+  const outside = (x,y) => x<-25 || x>W+25 || y<-15 || y>H+95;
+  const pts = [];
+  for(let i=0;i<4000 && pts.length<230;i++){
+    const x = -MARGIN+30+R()*(W+MARGIN*2-60), y = -MARGIN+50+R()*(H+MARGIN*2-70);
+    if(!outside(x,y) || pts.some(q => Math.hypot(q.x-x,(q.y-y)*1.3) < 52)) continue;
+    pts.push({ x, y, t: R()<.38 ? 1 : (R()<.25 ? 2 : 0), s: .9+R()*.35 });
+  }
+  pts.sort((a,b) => a.y-b.y).forEach(q => { g.save(); g.translate(q.x,q.y); g.scale(q.s,q.s); g.drawImage(treeSpr[q.t],-65,-136,130,160); g.restore(); });
+  /* 바깥 덤불 */
+  for(let i=0;i<160;i++){ const x = -MARGIN+R()*(W+MARGIN*2), y = -MARGIN+R()*(H+MARGIN*2); if(!outside(x,y)) continue; g.fillStyle = '#3f5a2c'; g.beginPath(); g.arc(x,y,7+R()*6,0,7); g.fill(); g.fillStyle = '#58783a'; g.beginPath(); g.arc(x-2,y-3,5,0,7); g.fill(); }
+  return c;
+}
+function buildAll(){ BUILDINGS.forEach(buildSprite); treeSpr = [0,1,2].map(treeSprite); signSpr = buildSign(); welcomeSpr = buildWelcome(); bgCv = buildBg(); outCv = buildOuter(); }
 buildAll();
 if(document.fonts && document.fonts.load){ Promise.all([document.fonts.load('700 15px Jua'), document.fonts.load('600 12px Jua')]).then(() => buildAll()).catch(() => {}); }
 
@@ -1094,10 +1112,12 @@ function render(t, dt){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle = '#232b1d'; ctx.fillRect(0,0,vw,vh);
   const z = zoom, tod = todState();
-  const cx = W*z<=vw ? W/2 : Math.max(vw/2/z, Math.min(W-vw/2/z, cam.x)), cy = H*z<=vh ? H/2 : Math.max(vh/2/z, Math.min(H-vh/2/z, cam.y));
+  const clampCam = (c, v, len) => { const half = v/2/z, lo = half-MARGIN, hi = len-half+MARGIN; return lo>hi ? len/2 : Math.max(lo,Math.min(hi,c)); };
+  const cx = clampCam(cam.x,vw,W), cy = clampCam(cam.y,vh,H);
   const ox = vw/2 - cx*z, oy = vh/2 - cy*z;
   ctx.setTransform(dpr*z,0,0,dpr*z,dpr*ox,dpr*oy);
   stepFx(dt, t);
+  ctx.drawImage(outCv,-MARGIN,-MARGIN);
   ctx.drawImage(bgCv,0,0,W,H);
   drawCloudShadows(ctx,t); drawPondFx(ctx,t);
   /* 모닥불터 바닥 불빛 */
@@ -1137,7 +1157,7 @@ function render(t, dt){
   drawActFx(ctx,t);
   if(target){ ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ell(ctx,target.x,target.y,10+Math.sin(t*8)*2,4.5); ctx.stroke(); }
   /* 노을빛, 밤의 어둠(불빛이 있는 곳만 밝게) */
-  if(tod.warm>.01){ ctx.fillStyle = 'rgba(255,140,64,'+(.2*tod.warm)+')'; ctx.fillRect(0,0,W,H); }
+  if(tod.warm>.01){ ctx.fillStyle = 'rgba(255,140,64,'+(.2*tod.warm)+')'; ctx.fillRect(-MARGIN,-MARGIN,W+MARGIN*2,H+MARGIN*2); }
   if(tod.n>.02){
     if(lightCv.width !== Math.ceil(vw*dpr) || lightCv.height !== Math.ceil(vh*dpr)){ lightCv.width = Math.ceil(vw*dpr); lightCv.height = Math.ceil(vh*dpr); }
     lg.setTransform(dpr,0,0,dpr,0,0); lg.globalCompositeOperation = 'source-over'; lg.clearRect(0,0,vw,vh);
