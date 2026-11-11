@@ -224,7 +224,7 @@ let nextId = 1;
 const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
 const broadcast = (m, except) => { const s = JSON.stringify(m); for (const [ws] of players) if (ws !== except && ws.readyState === 1) ws.send(s); };
 const pub = p => ({ id: p.id, name: p.name, uni: p.uni, cap: p.cap, x: p.x, y: p.y, dir: p.dir, act: p.act || null });
-const okAct = a => a === 'sit' || /^(swing[01]|pull[01]|bench[01]|jump[01]|curl[01]|punch0)$/.test(a || '');   // 앉기·그네·체력단련 기구 자세
+const okAct = a => a === 'sit' || /^(swing[01]|pull[0-3]|bench[01]|jump[01]|curl[01]|punch0)$/.test(a || '');   // 앉기·그네·체력단련 기구 자세
 
 const ipConns = new Map();   // 한 주소에서 동시에 열 수 있는 연결 수
 const MAX_PER_IP = 12;       // 부대·학교처럼 여럿이 같은 주소를 쓸 수 있어서 넉넉하게
