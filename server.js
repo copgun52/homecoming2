@@ -12,6 +12,7 @@ const DATA = path.join(DATA_DIR, 'data.json');
 const BUILDING_IDS = ['job', 'cert', 'trip', 'rest', 'story', 'soon'];
 const MAX_PLAYERS = 100;                 // 동시 접속 최대 인원 (서버 1대)
 const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대 개수 (사실상 영구)
+const PLEDGE_HOURS = 24;                        // 다짐 등불이 마을에 걸려 있는 시간(지나면 화면에서만 사라지고 기록은 남아요)
 const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보내는 최근 개수
 const KEEP_COMMENTS = 300, SHOW_COMMENTS = 30;  // 글 하나당 댓글: 보관 최대 / 화면에 보내는 최근 개수
 const W = 1600, H = 1000;                       // 마을 크기(화면과 같아야 해요)
@@ -71,6 +72,7 @@ BUILDING_IDS.forEach(id => db.posts[id].forEach(p => {
 }));
 /* 화면에 보내는 모양: 누가 눌렀는지(uid)는 숨기고, 개수와 "내가 눌렀는지"만 알려줘요. 댓글은 최근 SHOW_COMMENTS개만(전체 개수는 cn) */
 const cview = c => ({ id: c.id, name: c.name, text: c.text, date: c.date });
+const livePledges = () => { const since = Date.now() - PLEDGE_HOURS * 3600000; return db.pledges.filter(p => p.t && p.t >= since).slice(-SHOW_PLEDGES); };
 const view = (p, uid) => { const cs = p.comments.filter(c => !c.hidden);
   return { id: p.id, name: p.name, text: p.text, date: p.date, likes: p.likes.length, liked: !!uid && p.likes.includes(uid),
     comments: cs.slice(-SHOW_COMMENTS).map(cview), cn: cs.length }; };
@@ -154,7 +156,7 @@ function adminApi(req, res, ip, url) {
       const stats = { today: { v: td.v.length, n: td.n, peak: td.peak || 0 }, total: db.stats.total.length, online: [...players.values()].map(p => ({ name: p.name, ip: String(p.ipk).slice(0, 6), since: p.joinedAt })),
         days: Object.keys(db.stats.days).sort().slice(-14).reverse().map(k => ({ d: k, v: db.stats.days[k].v.length, n: db.stats.days[k].n, peak: db.stats.days[k].peak || 0 })),
         visits: db.visits.slice(-200).reverse().map(v => ({ t: v.t, ev: v.ev, name: v.name, ip: String(v.ip).slice(0, 6), vk: v.vk, dur: v.dur })) };
-      return json(200, { stats, chat: db.chat.slice(-300).reverse().map(c => ({ id: c.id, t: c.t, name: c.name, text: c.text, ip: String(c.ip || '').slice(0, 6) })), posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text })).slice(-100).reverse(),
+      return json(200, { stats, chat: db.chat.slice(-300).reverse().map(c => ({ id: c.id, t: c.t, name: c.name, text: c.text, ip: String(c.ip || '').slice(0, 6) })), posts: out, pledges: db.pledges.map((p, i) => ({ i, name: p.name, text: p.text, t: p.t || 0, live: !!(p.t && p.t >= Date.now() - PLEDGE_HOURS * 3600000) })).slice(-100).reverse(),
         counts: { posts: BUILDING_IDS.reduce((n, b) => n + db.posts[b].length, 0), pledges: db.pledges.length, chat: db.chat.length } });
     }
     if (url === '/api/admin/delete' || url === '/api/admin/restore') {
@@ -249,7 +251,7 @@ wss.on('connection', (ws, req) => {
       me.uid = typeof m.uid === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.uid) ? m.uid : 'conn-' + me.id; // 브라우저 고유 번호(좋아요 1회 제한용)
       logVisit('in', me, now);
       const recent = {}; BUILDING_IDS.forEach(id => { recent[id] = postsFor(id, me.uid); });
-      send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: db.pledges.slice(-SHOW_PLEDGES), posts: recent });
+      send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: livePledges(), posts: recent });
       broadcast({ t: 'join', p: pub(me) }, ws);
       return;
     }
@@ -276,7 +278,7 @@ wss.on('connection', (ws, req) => {
       if (now - me.last < 1500) return; me.last = now;
       const text = str(m.text, 30); if (!text) return;
       if (!hit('pledge:' + ip, 6, TEN_MIN)) return send(ws, { t: 'limit', k: 'pledge' });
-      const p = { name: me.name, text, x: num(m.x, 60, W - 60, 700), y: num(m.y, 60, H - 60, 450) };
+      const p = { name: me.name, text, x: num(m.x, 60, W - 60, 700), y: num(m.y, 60, H - 60, 450), t: now };
       db.pledges.push(p); db.pledges = db.pledges.slice(-KEEP_PLEDGES); save();
       broadcast({ t: 'pledge', p });
     } else if (m.t === 'post') {

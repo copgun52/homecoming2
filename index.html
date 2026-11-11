@@ -371,7 +371,9 @@ const SEED_PLEDGES = [
   { name:'예비창업가', text:'작게라도 일단 만들어보기', x:700, y:350 },
 ];
 let pledges = store.get('hv_pledges', []);
-const allPledges = () => net.on ? net.pledges : SEED_PLEDGES.concat(pledges);
+/* 다짐 등불은 24시간 동안만 마을에 걸려요(기록은 남지만 화면에서는 사라져요). 시각(t)이 없는 예시 등불은 계속 보여요 */
+const PLEDGE_MS = 24*3600*1000;
+const allPledges = () => { const now = Date.now(); return (net.on ? net.pledges : SEED_PLEDGES.concat(pledges)).filter(p => !p.t || now - p.t < PLEDGE_MS); };
 
 /* ---------- start screen ---------- */
 const pv = $('#pv').getContext('2d');
@@ -1307,14 +1309,14 @@ $('#pledgeBtn').onclick = () => openCard(`
   <div class="body">
     <input type="text" id="pl" maxlength="30" placeholder="예) 오늘은 이력서 한 장 쓰기">
     <div class="row"><button class="primary" id="plGo">등불 걸기</button></div>
-    <p class="note">짧을수록 좋아요 (30자). 걸린 등불은 광장 근처에서 볼 수 있어요.</p>
+    <p class="note">짧을수록 좋아요 (30자). 걸린 등불은 광장 근처에서 볼 수 있고, 24시간 뒤에는 마을에서 사라져요.</p>
   </div>`, () => {
     $('#plGo').onclick = () => {
       const v = $('#pl').value.trim(); if(!v) return;
       const a = Math.random()*6.28, r = 40+Math.random()*90;
       const px = PLAZA.x+Math.cos(a)*r*1.3, py = PLAZA.y+Math.sin(a)*r*.8+30;
       if(net.on) net.send({ t:'pledge', text:v, x:Math.round(px), y:Math.round(py) });
-      else { pledges.push({ name: me.name, text: v, x:px, y:py }); store.set('hv_pledges', pledges.slice(-30)); }
+      else { pledges.push({ name: me.name, text: v, x:px, y:py, t:Date.now() }); store.set('hv_pledges', pledges.slice(-30)); }
       closeModal(); toast('🏮 광장에 등불이 걸렸어요'); say(me,'🏮 '+v.slice(0,14),3000); net.send({t:'say',text:'🏮 '+v.slice(0,14)});
     };
     setTimeout(()=>$('#pl').focus(),50);
