@@ -1384,17 +1384,17 @@ function openBuilding(b){
     $('#mcard').innerHTML = `
       <header><div class="ico" style="background:${b.roof};color:#fff">${b.emoji}</div><div><h2>${esc(b.name)}</h2><p>${esc(b.desc)}</p></div><button class="x" onclick="window.__close()">×</button></header>
       <div class="body">
-        <div class="story example"><div class="who"><span class="tag">📌 예시</span><span>이런 식으로 남겨 보세요</span></div><p>${esc(b.example)}</p></div>
-        ${popular.map(p => postHtml(p, true)).join('')}
-        <h3>${esc(b.cta || '나도 한마디 남기기')}</h3>
-        <textarea id="pt" maxlength="300" placeholder="${esc(b.ph || '이 분야에서 내가 해본 것, 궁금한 것, 도움이 된 정보를 남겨 주세요')}"></textarea>
-        <div class="row"><button class="primary" id="ptGo">남기기</button></div>
-        <p class="note">${b.notice ? '🔒 '+esc(b.notice)+'<br>' : ''}${net.on ? '남긴 글은 접속한 모두에게 보여요. 좋아요는 글마다 한 번만 누를 수 있어요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
         <div class="rules"><b>🙏 함께 지켜 주세요</b><ul>
           <li>부대 이름·위치, 훈련·장비 정보 같은 <b>군사 기밀</b>은 쓰지 마세요.</li>
           <li>실명, 전화번호, 계정 등 <b>개인정보</b>는 올리지 마세요. 로그인이 없어서 한번 올린 글은 모두가 볼 수 있어요.</li>
           <li>특정인을 향한 욕설·비방, 광고는 안 돼요. 부적절한 글은 🚩로 신고해 주세요.</li>
         </ul></div>
+        <div class="story example"><div class="who"><span class="tag">📌 예시</span><span>이런 식으로 남겨 보세요</span></div><p>${esc(b.example)}</p></div>
+        <h3>${esc(b.cta || '나도 한마디 남기기')}</h3>
+        <textarea id="pt" maxlength="300" placeholder="${esc(b.ph || '이 분야에서 내가 해본 것, 궁금한 것, 도움이 된 정보를 남겨 주세요')}"></textarea>
+        <div class="row"><button class="primary" id="ptGo">남기기</button></div>
+        <p class="note">${b.notice ? '🔒 '+esc(b.notice)+'<br>' : ''}${net.on ? '남긴 글은 접속한 모두에게 보여요. 좋아요는 글마다 한 번만 누를 수 있어요.' : '지금은 오프라인이라 내 브라우저에만 저장돼요.'}</p>
+        ${popular.map(p => postHtml(p, true)).join('')}
         ${rest.length ? '<h3>모든 글 (최신순)</h3>'+rest.map(p => postHtml(p, false)).join('') : ''}
       </div>`;
     $('#ptGo').onclick = () => {
