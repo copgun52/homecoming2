@@ -15,7 +15,7 @@ const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대
 const PLEDGE_HOURS = 24;                        // 다짐 등불이 마을에 걸려 있는 시간(지나면 화면에서만 사라지고 기록은 남아요)
 const SHOW_POSTS = 100, SHOW_PLEDGES = 60;      // 접속할 때 화면에 보내는 최근 개수
 const KEEP_COMMENTS = 300, SHOW_COMMENTS = 30;  // 글 하나당 댓글: 보관 최대 / 화면에 보내는 최근 개수
-const W = 1600, H = 1000;                       // 마을 크기(화면과 같아야 해요)
+const W = 1600, H = 1260;                       // 마을 크기(화면과 같아야 해요)
 const ADMIN_KEY = process.env.ADMIN_KEY || '';  // 운영자 비밀번호. 없으면 운영자 기능은 꺼져 있어요
 const CHAT_KEEP = 5000, CHAT_DAYS = 30;          // 채팅 기록: 최대 개수 / 보관 일수(오래된 것은 자동으로 지워요)
 const HIDE_AT = 5;                              // 서로 다른 사람 5명이 신고하면 일단 가려요(운영자가 확인)

@@ -133,6 +133,21 @@
   .pick-item.on{color:var(--ink);font-size:20px}
   .preview{display:grid;place-items:center;background:#a9c27a;border-radius:14px;height:110px;margin-bottom:14px}
   .go{width:100%;padding:13px;font-size:16px;margin-top:4px}
+  .gdlg{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(480px,calc(100% - 24px));max-height:calc(100vh - 28px);overflow:auto;background:var(--paper);border:2px solid var(--olive-d);border-radius:18px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px 16px;z-index:22;display:none;animation:rise2 .22s ease}
+  .gdlg.show{display:block}
+  @keyframes rise2{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+  .gdlg.shake{animation:shk .3s}
+  @keyframes shk{0%,100%{transform:translateX(-50%)}25%{transform:translateX(calc(-50% - 7px))}75%{transform:translateX(calc(-50% + 7px))}}
+  .gwho{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-family:"Jua","Malgun Gothic",sans-serif;font-size:16px;color:var(--olive-d)}
+  .gwho i{font-style:normal;background:var(--olive);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:15px}
+  .gsay{font-size:15px;line-height:1.65;color:var(--ink);margin-bottom:10px}
+  .gnote{font-size:12px;color:var(--muted)}
+  .gbody{margin-bottom:10px}.gbody:empty{display:none}
+  .gbody input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:#fff;color:var(--ink);box-sizing:border-box}
+  .gfield{margin-bottom:10px}.gfield label{display:block;font-size:12px;font-weight:700;color:var(--olive-d);margin-bottom:5px}
+  .gbtns{display:flex;gap:8px;justify-content:flex-end}.gbtns:empty{display:none}
+  .ghost{background:var(--paper2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:700}
+  body.gate .hud,body.gate .bar,body.gate .hint,body.gate #log{display:none}
   .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
   .toast.show{opacity:1}
   .emo{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;display:none;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 8px;box-shadow:0 3px 0 var(--line),0 8px 18px rgba(0,0,0,.28);z-index:7}
@@ -176,19 +191,12 @@
 <div class="emo" id="emo"><button data-i="0">😄</button><button data-i="1">👏</button><button data-i="2">💪</button><button data-i="3">😭</button><button data-i="4">🫡</button></div>
 <div class="toast" id="toast"></div>
 
-<!-- start -->
-<div class="overlay show start" id="start">
-  <div class="card"><div class="body" style="padding:24px">
-    <h1>복귀마을에 오신 걸<br>환영합니다 🫡</h1>
-    <p class="sub">막 전역해서 뭘 해야 할지 막막한 사람들이 모이는 마을이에요. 걸어 다니며 선배들의 경험을 구경하고, 내 다짐도 걸어두세요.</p>
-    <div class="preview"><canvas id="pv" width="160" height="110" style="width:160px;height:110px"></canvas></div>
-    <div class="field"><label>마을에서 쓸 이름</label><input type="text" id="nm" maxlength="8" placeholder="예) 복학생J"></div>
-    <div class="field"><label>옷 색</label><div class="swatches" id="swUni"></div></div>
-    <div class="field"><label>모자 색</label><div class="swatches" id="swCap"></div></div>
-    <div class="field"><label>내 경례 구호 <span style="font-weight:400;color:var(--muted)">(🫡 경례 버튼을 누르면 말풍선으로 나와요)</span></label><div class="picker"><div class="pick-hl"></div><div class="pick-list" id="chips"></div></div></div>
-    <div class="field"><label>전역일<span style="font-weight:400;color:var(--muted)">(선택 · 전역 후 며칠째인지 표시돼요)</span></label><input type="date" id="dis"></div>
-    <button class="primary go" id="go">마을로 들어가기</button>
-  </div></div>
+<!-- 위병소 대화(초병이 이름·경례 구호를 물어봐요 / 나갈 때 확인) -->
+<div class="gdlg" id="gdlg">
+  <div class="gwho"><i>🪖</i>위병소 초병</div>
+  <div class="gsay" id="gsay"></div>
+  <div class="gbody" id="gbody"></div>
+  <div class="gbtns" id="gbtns"></div>
 </div>
 
 <!-- modal -->
@@ -205,7 +213,7 @@ const store = {
 };
 
 /* ---------- world ---------- */
-const W = 1600, H = 1000;
+const W = 1600, VH = 1000, H = 1260;   // VH: 울타리 안 마을 높이, H: 위병소 밖 공터까지 합친 전체 높이
 const PLAZA = { x:800, y:520, rx:220, ry:120 };
 const FIT = { x:100, y:385, w:370, h:275 };   // 체력단련장 바닥(연못 자리)
 const CAMP = { x:1340, y:570 };
@@ -251,16 +259,16 @@ BUILDINGS.forEach(b => {
 /* 길(모래·돌길) 영역 */
 const ROADS = [
   { x:90, y:302, w:1420, h:56 }, { x:90, y:872, w:1420, h:56 },
-  { x:492, y:302, w:56, h:626 }, { x:1052, y:302, w:56, h:626 }, { x:772, y:300, w:56, h:112 },
+  { x:492, y:302, w:56, h:626 }, { x:1052, y:302, w:56, h:690 }, { x:772, y:300, w:56, h:112 },
   ...BUILDINGS.map(b => b.north ? { x:b.door.x-24, y:b.y+b.h, w:48, h:128 } : { x:b.door.x-24, y:b.y+b.h, w:48, h:98 }),
 ];
-const LAMPS = [[300,374],[690,374],[910,374],[1300,374],[420,866],[640,866],[960,866],[1180,866],[590,548],[1010,548],[496,640],[1104,640]];
+const LAMPS = [[958,1096],[1202,1096],[300,374],[690,374],[910,374],[1300,374],[420,866],[640,866],[960,866],[1180,866],[590,548],[1010,548],[496,640],[1104,640]];
 
 /* 매번 같은 마을이 나오도록 고정된 난수 */
 function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 const rnd = mulberry(20261104);
 function isFree(x, y, pad=0){
-  if(x<pad||y<pad||x>W-pad||y>H-pad) return false;
+  if(x<pad||y<pad||x>W-pad||y>VH-pad) return false;
   for(const r of ROADS) if(x>r.x-pad && x<r.x+r.w+pad && y>r.y-pad && y<r.y+r.h+pad) return false;
   for(const b of BUILDINGS) if(x>b.x-pad-30 && x<b.x+b.w+pad+30 && y>b.y-pad-60 && y<b.y+b.h+pad+20) return false;
   if(((x-PLAZA.x)/(PLAZA.rx+pad))**2 + ((y-PLAZA.y)/(PLAZA.ry+pad))**2 < 1) return false;
@@ -271,17 +279,27 @@ function isFree(x, y, pad=0){
   if(Math.hypot(x-1104, y-524) < 44+pad) return false;
   for(const q of TENTS) if(Math.hypot(x-q.x, y-q.y) < 62*q.s+pad) return false;
   if(Math.abs(x-TRUCK.x) < 92+pad && Math.abs(y-TRUCK.y) < 52+pad) return false;
-  if(Math.hypot(x-GATE.x, y-GATE.y) < 90+pad) return false;
+  if(Math.abs(x-GATE.x) < 270+pad && y > 930-pad) return false;   // 위병소(건물·참호)
   if(Math.hypot(x-FIT_SIGN.x, y-FIT_SIGN.y) < 36+pad) return false;
   return true;
 }
 const TENTS = [{ x:1478, y:412, s:1 }, { x:1508, y:508, s:.85 }];
-const TRUCK = { x:1262, y:962 };
-const GATE = { x:1010, y:952 };
+const TRUCK = { x:1440, y:962 };
+/* 위병소(정문): 마을 맨 아래 울타리 한가운데 길목. 그 아래(바깥)에 공터가 있고, 방문자는 거기서 시작해요 */
+const GATE = { x:1080, y:1000 };
+const GB = GATE.y + 10;                           // 위병소 건물 앞면이 닿는 줄
+const AX0 = 880, AX1 = 1280;                      // 위병소 밖 공터의 왼쪽·오른쪽 끝
+const SPAWN = { x:GATE.x, y:1132 };               // 처음 들어올 때 서 있는 자리
+const EXIT_Y = 1214;                              // 이보다 더 내려가려 하면 "나가겠습니까?"
+const SENTRIES = [
+  { name:'초병', uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x-64, y:GATE.y+40, dir:1,  step:0, say:'', sayT:0, salT:0, cd:0 },
+  { name:'초병', uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x+64, y:GATE.y+40, dir:-1, step:0, say:'', sayT:0, salT:0, cd:0 },
+];
+const OUT_BLOCKS = [[906,1112,966,1142],[1208,1066,1256,1080],[GATE.x+70,1088,GATE.x+84,1102],[GATE.x-90,1188,GATE.x-76,1200]];
 const FIT_SIGN = { x:458, y:396 };
 const TREES = [];
 for(let i=0; i<2500 && TREES.length<58; i++){
-  const x = 44+rnd()*(W-88), y = 70+rnd()*(H-120);
+  const x = 44+rnd()*(W-88), y = 70+rnd()*(VH-120);
   if(!isFree(x,y,36) || TREES.some(t => Math.hypot(t.x-x,t.y-y) < 74)) continue;
   TREES.push({ x, y, type: rnd()<.3 ? 2 : (rnd()<.33 ? 1 : 0), s: .85+rnd()*.3 });
 }
@@ -344,7 +362,7 @@ const INTERACTS = [
 /* ---------- state ---------- */
 const COLORS_UNI = ['#6b7f4a','#4f6d8f','#8c3b3b','#d9822b','#444b55','#c9a3b8'];
 const COLORS_CAP = ['#2f3a22','#2a2f3a','#d9d2bd','#c0392b','#e0b13a','#3d6f8a'];
-const me = { name:'', uni:COLORS_UNI[0], cap:COLORS_CAP[0], x:PLAZA.x+130, y:PLAZA.y+96, dir:1, step:0, say:'', sayT:0, speed:170 };
+const me = { name:'', uni:COLORS_UNI[0], cap:COLORS_CAP[0], x:SPAWN.x, y:SPAWN.y, dir:1, step:0, say:'', sayT:0, speed:170 };
 let discharge = '';
 const keys = {};
 let target = null;
@@ -415,51 +433,104 @@ let pledges = store.get('hv_pledges', []);
 const PLEDGE_MS = 24*3600*1000;
 const allPledges = () => { const now = Date.now(); return (net.on ? net.pledges : SEED_PLEDGES.concat(pledges)).filter(p => !p.t || now - p.t < PLEDGE_MS); };
 
-/* ---------- start screen ---------- */
-const pv = $('#pv').getContext('2d');
+/* ---------- 위병소 입장: 초병이 이름·경례 구호를 물어봐요 ---------- */
 function swatches(el, list, key){
-  list.forEach((c,i) => {
+  list.forEach(c => {
     const b = document.createElement('button');
-    b.className = 'sw' + (i===0?' on':''); b.style.background = c; b.setAttribute('aria-label','색 '+(i+1));
+    b.className = 'sw' + (c===me[key] ? ' on' : ''); b.style.background = c; b.setAttribute('aria-label','색');
     b.onclick = () => { me[key] = c; [...el.children].forEach(x=>x.classList.remove('on')); b.classList.add('on'); drawPreview(); };
     el.appendChild(b);
   });
 }
-swatches($('#swUni'), COLORS_UNI, 'uni'); swatches($('#swCap'), COLORS_CAP, 'cap');
-function drawPreview(){ pv.clearRect(0,0,160,110); pv.save(); pv.translate(80,92); pv.scale(2.3,2.3); person(pv, me, 0, 0, false); pv.restore(); }
-setTimeout(drawPreview, 0);   // person()이 쓰는 그림 설정이 아래쪽에서 만들어진 뒤에 그려요
+function drawPreview(){ const el = $('#pv'); if(!el) return; const pv = el.getContext('2d'); pv.clearRect(0,0,160,110); pv.save(); pv.translate(80,92); pv.scale(2.3,2.3); person(pv, me, 0, 0, false); pv.restore(); }
 
 const saved = store.get('hv_me', null);
 const SALUTES = ['충성','공격','강철','결전','단결','돌격','맹호','무적','백골','백마','북진','선봉','승진','이기자','유격','전격','전진','진격','진군','충일','철풍','청성','태권','태풍','특공','필승','화랑'];
 me.salute = SALUTES.includes(saved && saved.salute) ? saved.salute : SALUTES[0];
-/* 스크롤로 구호 고르기: 가운데 칸에 멈춘 항목이 선택돼요 */
-const PICK_H = 44, pickList = $('#chips');
-SALUTES.forEach((s, i) => {
-  const d = document.createElement('div');
-  d.className = 'pick-item'; d.textContent = s;
-  d.onclick = () => pickList.scrollTo({ top: i*PICK_H, behavior:'smooth' });
-  pickList.appendChild(d);
-});
+if(saved && COLORS_UNI.includes(saved.uni)) me.uni = saved.uni;
+if(saved && COLORS_CAP.includes(saved.cap)) me.cap = saved.cap;
+const gd = { box:$('#gdlg'), say:$('#gsay'), body:$('#gbody'), btns:$('#gbtns') };
+let dlgOpen = false, frozen = true, camBias = 0;   // frozen: 대화 중·확인 전에는 걸을 수 없어요
+const barrier = { a:0, hold:0 };
+function gSentry(i, bubble){ SENTRIES.forEach((q,k) => { q.sayT = (k===i && bubble) ? 999 : 0; q.say = (k===i && bubble) ? bubble : ''; }); }
+function gOpen(who, html, bubble, bodyHtml, buttons, hideHud){
+  dlgOpen = true; document.body.classList.toggle('gate', !!hideHud);
+  gd.say.innerHTML = html; gd.body.innerHTML = bodyHtml || ''; gd.btns.innerHTML = '';
+  (buttons||[]).forEach(([label, cls, fn]) => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; gd.btns.appendChild(b); });
+  gd.box.classList.remove('shake'); gd.box.classList.add('show'); gSentry(who, bubble);
+}
+function gClose(){ dlgOpen = false; gd.box.classList.remove('show'); gSentry(-1); document.body.classList.remove('gate'); }
+function gShake(){ gd.box.classList.remove('shake'); void gd.box.offsetWidth; gd.box.classList.add('shake'); }
+const PICK_H = 44; let pickList = null;
 function syncPick(){
   const i = Math.max(0, Math.min(SALUTES.length-1, Math.round(pickList.scrollTop/PICK_H)));
   me.salute = SALUTES[i];
   [...pickList.children].forEach((x,j) => x.classList.toggle('on', j===i));
 }
-pickList.addEventListener('scroll', syncPick);
-pickList.scrollTop = SALUTES.indexOf(me.salute)*PICK_H; syncPick();
-if (saved){ $('#nm').value = saved.name||''; if(saved.dis) $('#dis').value = saved.dis; }
-
-$('#go').onclick = () => {
-  me.name = ($('#nm').value.trim() || '새내기').slice(0,8);
-  discharge = $('#dis').value;
-  store.set('hv_me', { name: me.name, dis: discharge, salute: me.salute });
-  $('#start').classList.remove('show'); started = true; connect();
-  if (discharge){
-    const d = Math.floor((Date.now() - new Date(discharge+'T00:00:00')) / 86400000);
-    $('#dday').style.display = ''; $('#dday').innerHTML = d >= 0 ? '전역 <b>D+'+(d+1)+'</b>' : '전역 <b>D'+d+'</b>';
-  }
-  toast('걸어 다니며 건물에 들어가 보세요!');
-};
+function buildPicker(){   /* 스크롤로 구호 고르기: 가운데 칸에 멈춘 항목이 선택돼요 */
+  pickList = $('#chips');
+  SALUTES.forEach((t, i) => { const d = document.createElement('div'); d.className = 'pick-item'; d.textContent = t; d.onclick = () => pickList.scrollTo({ top:i*PICK_H, behavior:'smooth' }); pickList.appendChild(d); });
+  pickList.addEventListener('scroll', syncPick);
+  pickList.scrollTop = SALUTES.indexOf(me.salute)*PICK_H; syncPick();
+}
+let gName = (saved && saved.name) || '', gDis = (saved && saved.dis) || '';
+function stepName(){
+  gOpen(0, '정지! 여기는 <b>복귀마을 위병소</b>입니다.<br>신분을 확인하겠습니다. <b>이름</b>이 어떻게 되십니까?', '🪖 정지! 누구십니까?',
+    '<input type="text" id="nm" maxlength="8" placeholder="예) 복학생J" autocomplete="off">', [['확인','primary',submitName]], true);
+  const nm = $('#nm'); nm.value = gName;
+  nm.addEventListener('keydown', e => { e.stopPropagation(); if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); submitName(); } });
+  setTimeout(() => nm.focus(), 60);
+}
+function submitName(){
+  const v = $('#nm').value.trim().slice(0,8);
+  if(!v){ gSentry(0,'이름을 말씀해 주십시오!'); gShake(); return; }
+  gName = v; stepSalute();
+}
+function stepSalute(){
+  gOpen(1, '<b>'+esc(gName)+'</b> 님이시군요. 확인했습니다.<br>다음은 <b>경례 구호</b>입니다. 어떤 구호를 쓰십니까? <span class="gnote">(🫡 경례 버튼을 누르면 말풍선으로 나와요)</span>', '🪖 구호를 대십시오!',
+    '<div class="picker"><div class="pick-hl"></div><div class="pick-list" id="chips"></div></div>', [['이전','ghost',stepName],['확인','primary',stepLook]], true);
+  buildPicker();
+}
+function stepLook(){
+  gOpen(0, '구호 확인! 마지막으로 <b>복장 점검</b>입니다.<br>옷·모자 색을 고르시고, 전역일이 있으면 알려 주십시오 <span class="gnote">(선택)</span>', '🪖 복장 점검!',
+    '<div class="preview"><canvas id="pv" width="160" height="110" style="width:160px;height:110px"></canvas></div>'
+    + '<div class="gfield"><label>옷 색</label><div class="swatches" id="swUni"></div></div><div class="gfield"><label>모자 색</label><div class="swatches" id="swCap"></div></div>'
+    + '<div class="gfield"><label>전역일 (전역 후 며칠째인지 표시돼요)</label><input type="date" id="dis"></div>', [['이전','ghost',stepSalute],['통과 요청','primary',() => stepPass(false)]], true);
+  swatches($('#swUni'), COLORS_UNI, 'uni'); swatches($('#swCap'), COLORS_CAP, 'cap'); $('#dis').value = gDis; drawPreview();
+}
+function showDday(){
+  if(!discharge) return;
+  const d = Math.floor((Date.now() - new Date(discharge+'T00:00:00')) / 86400000);
+  $('#dday').style.display = ''; $('#dday').innerHTML = d >= 0 ? '전역 <b>D+'+(d+1)+'</b>' : '전역 <b>D'+d+'</b>';
+}
+function stepPass(fromSaved){
+  if(!fromSaved){ const d = $('#dis'); gDis = d ? d.value : gDis; }
+  me.name = gName; discharge = gDis;
+  store.set('hv_me', { name: me.name, dis: discharge, salute: me.salute, uni: me.uni, cap: me.cap });
+  gOpen(0, '신원 확인 완료! <b>'+esc(me.salute)+'</b>! 복귀를 환영합니다.<br>위병소를 지나 마을로 들어가십시오.', '🫡 '+me.salute+'! 통과!', '', [], true);
+  SENTRIES.forEach(q => { q.salT = 2; });
+  barrier.hold = 6;
+  setTimeout(() => { gClose(); frozen = false; started = true; connect(); showDday(); toast('⬆ 위병소를 지나 마을로 들어가 보세요!'); }, 1500);
+}
+function stepBack(){   /* 다시 온 사람: 저장된 이름·구호로 간단히 확인 */
+  gOpen(0, '어? <b>'+esc(saved.name)+'</b> 님 아니십니까! 다시 오셨군요.<br>구호는 <b>'+esc(me.salute)+'</b>, 맞으시죠?', '🫡 '+me.salute+'! 어서 오십시오!', '',
+    [['정보 바꾸기','ghost',stepName],['네, 들어갑니다','primary',() => stepPass(true)]], true);
+}
+/* 나가기: 위병소 밖 아래쪽 길로 더 내려가려 하면 물어봐요 */
+function askExit(){
+  if(dlgOpen) return; frozen = true; target = null;
+  gOpen(1, '잠깐! <b>복귀마을을 나가겠습니까?</b>', '🪖 나가십니까?', '', [['남아 있기','ghost',stayHere],['나가기','primary',doLeave]], false);
+}
+function stayHere(){ me.y = EXIT_Y - 50; target = null; gClose(); frozen = false; }
+function doLeave(){
+  gOpen(0, '충성! 조심히 가십시오. 또 오십시오 🫡', '🫡 충성! 조심히 가십시오!', '', [], false);
+  SENTRIES.forEach(q => { q.salT = 2; });
+  setTimeout(() => {
+    started = false; try{ if(net.ws) net.ws.close(); }catch(e){}
+    gOpen(0, '복귀마을을 나가셨습니다.<br>다시 들어오려면 아래 버튼을 눌러 주세요.', '', '', [['다시 들어가기','primary',() => location.reload()]], true);
+  }, 1300);
+}
+if(saved && saved.name) stepBack(); else stepName();
 
 /* ---------- canvas ---------- */
 const cv = $('#c'), ctx = cv.getContext('2d');
@@ -532,15 +603,25 @@ function person(c, p, x, y, label){
     if(ex==='curl') ang = -(.15+1.5*(.5-.5*Math.cos(T*4+ai*Math.PI)));
     else if(ex==='punch'){ ang = -(Math.PI/2)*Math.max(0,Math.sin(T*7+ai*Math.PI)) - .12; hand = '#c8362e'; hr = 3.6; }
     else if(ex==='jump'){ ang = J.phase==='crouch' ? .9*J.crouch : (J.phase==='air' ? -2.3 : (J.phase==='land' ? -.9 : s*.7)); }
+    if(p.guard) ang = (p.salT>0 && ai===1) ? -2.55 : .12;
     c.save(); c.translate(ax,-21+bob); c.rotate(ang);
     c.fillStyle=p.uni; rr(c,-2.2,-1,4.4,10,2.2); c.fill(); c.stroke();
     c.fillStyle=hand; circ(c,0,10,hr); c.fill(); if(ex==='punch'){ c.strokeStyle = OL; c.lineWidth = 1; c.stroke(); }
     if(ex==='curl'){ c.fillStyle='#4a4d52'; rr(c,-5.5,8.4,11,3,1); c.fill(); rr(c,-6.5,6.6,3,6.6,1.2); c.fill(); rr(c,3.5,6.6,3,6.6,1.2); c.fill(); }
     c.restore(); });
+  if(p.guard){ c.save(); c.lineCap = 'round'; c.strokeStyle = OL; c.lineWidth = 4.2; c.beginPath(); c.moveTo(-8,-6+bob); c.lineTo(9.5,-25+bob); c.stroke(); c.strokeStyle = '#2f3236'; c.lineWidth = 2.4; c.stroke();
+    c.strokeStyle = '#6b4a2e'; c.beginPath(); c.moveTo(-8,-6+bob); c.lineTo(-4.2,-10.1+bob); c.stroke(); c.restore(); }
   c.fillStyle='#f5cfa5'; circ(c,0,-30+bob,8); c.fill(); c.stroke();
   c.fillStyle='#4a3626'; c.beginPath(); c.arc(0,-31+bob,8.3,Math.PI*.93,Math.PI*2.07); c.fill();
-  c.fillStyle=p.cap; c.beginPath(); c.arc(0,-32.5+bob,8.5,Math.PI,0); c.closePath(); c.fill(); c.stroke();
-  c.fillStyle=shade(p.cap,-.28); rr(c,2.4,-33.2+bob,9,3.2,1.6); c.fill(); c.stroke();
+  if(p.guard){   /* 초병: 철모 */
+    c.fillStyle='#55633a'; c.beginPath(); c.arc(0,-31.5+bob,9.7,Math.PI,0); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle='#46532f'; ell(c,0,-31+bob,11.2,2.6); c.fill(); c.stroke();
+    c.strokeStyle='rgba(30,44,18,.5)'; c.lineWidth=.9; for(let k=-2;k<=2;k++){ c.beginPath(); c.moveTo(k*3.2,-40+bob); c.lineTo(k*3.8,-33.5+bob); c.stroke(); }
+    c.strokeStyle=OL; c.lineWidth=1.3;
+  } else {
+    c.fillStyle=p.cap; c.beginPath(); c.arc(0,-32.5+bob,8.5,Math.PI,0); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle=shade(p.cap,-.28); rr(c,2.4,-33.2+bob,9,3.2,1.6); c.fill(); c.stroke();
+  }
   c.fillStyle='#2b2118'; circ(c,1.6,-29.3+bob,1.15); c.fill(); circ(c,5.2,-29.3+bob,1.15); c.fill();
   c.fillStyle='rgba(255,110,110,.45)'; ell(c,5.8,-26.8+bob,1.9,1.1); c.fill();
   c.restore();
@@ -757,9 +838,9 @@ function bench(g, x, y){
 }
 function buildBg(){
   const [c, g] = mk(W,H), R = mulberry(77); g.lineJoin = 'round';
-  const bgG = g.createLinearGradient(0,0,0,H); bgG.addColorStop(0,'#9bb467'); bgG.addColorStop(1,'#88a45a'); g.fillStyle = bgG; g.fillRect(0,0,W,H);
-  for(let i=0;i<360;i++){ const x = R()*W, y = R()*H, r = 28+R()*90; g.fillStyle = R()<.5 ? 'rgba(104,138,62,.2)' : 'rgba(190,200,120,.16)'; ell(g,x,y,r,r*.55); g.fill(); }
-  g.fillStyle = 'rgba(255,255,255,.035)'; for(let x=0;x<W;x+=120) g.fillRect(x,0,60,H);
+  const bgG = g.createLinearGradient(0,0,0,VH); bgG.addColorStop(0,'#9bb467'); bgG.addColorStop(1,'#88a45a'); g.fillStyle = bgG; g.fillRect(0,0,W,VH);
+  for(let i=0;i<360;i++){ const x = R()*W, y = R()*VH, r = 28+R()*90; g.fillStyle = R()<.5 ? 'rgba(104,138,62,.2)' : 'rgba(190,200,120,.16)'; ell(g,x,y,r,r*.55); g.fill(); }
+  g.fillStyle = 'rgba(255,255,255,.035)'; for(let x=0;x<W;x+=120) g.fillRect(x,0,60,VH);
   /* 길: 테두리 → 모래 → 자갈 */
   g.fillStyle = '#a89868'; ROADS.forEach(r => { rr(g,r.x-4,r.y-4,r.w+8,r.h+8,15); g.fill(); });
   g.fillStyle = '#d9cca0'; ROADS.forEach(r => { rr(g,r.x,r.y,r.w,r.h,12); g.fill(); });
@@ -806,18 +887,20 @@ function buildBg(){
   [[.5,76,46],[2.1,76,46],[3.6,76,46],[5.1,76,46]].forEach(([a,rx,ry]) => { g.save(); g.translate(CAMP.x+Math.cos(a)*rx,CAMP.y+8+Math.sin(a)*ry); g.rotate(a+Math.PI/2); g.fillStyle = '#8a5a34'; rr(g,-19,-6,38,12,6); g.fill(); g.strokeStyle = OL; g.lineWidth = 1.2; g.stroke(); g.fillStyle = '#d9b27a'; ell(g,17,0,3,5); g.fill(); g.restore(); });
   /* 꽃·풀·바위 */
   const fcol = ['#ffffff','#ffd54a','#ff8fab','#b39ddb','#ff9e5e','#7fd1ff'];
-  for(let i=0;i<260;i++){ const x = R()*W, y = R()*H; if(!isFree(x,y,10)) continue; g.strokeStyle = 'rgba(80,140,50,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x,y); g.lineTo(x-2,y-5); g.moveTo(x,y); g.lineTo(x+1,y-6); g.moveTo(x,y); g.lineTo(x+3,y-4); g.stroke(); }
-  for(let i=0;i<190;i++){ const x = R()*W, y = R()*H; if(!isFree(x,y,12)) continue; const col = fcol[Math.floor(R()*6)], n = 3+Math.floor(R()*3);
+  for(let i=0;i<260;i++){ const x = R()*W, y = R()*VH; if(!isFree(x,y,10)) continue; g.strokeStyle = 'rgba(80,140,50,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x,y); g.lineTo(x-2,y-5); g.moveTo(x,y); g.lineTo(x+1,y-6); g.moveTo(x,y); g.lineTo(x+3,y-4); g.stroke(); }
+  for(let i=0;i<190;i++){ const x = R()*W, y = R()*VH; if(!isFree(x,y,12)) continue; const col = fcol[Math.floor(R()*6)], n = 3+Math.floor(R()*3);
     for(let k=0;k<n;k++){ const fx = x+(R()-.5)*16, fy = y+(R()-.5)*10; g.strokeStyle = '#4f8f3a'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(fx,fy+4); g.lineTo(fx,fy); g.stroke(); g.fillStyle = col; for(let p=0;p<5;p++){ circ(g,fx+Math.cos(p*1.256)*2,fy+Math.sin(p*1.256)*2,1.6); g.fill(); } g.fillStyle = '#ffd54a'; circ(g,fx,fy,1.2); g.fill(); } }
-  for(let i=0;i<16;i++){ const x = R()*W, y = R()*H; if(!isFree(x,y,16)) continue; g.fillStyle = 'rgba(20,30,10,.2)'; ell(g,x+2,y+3,9,3.6); g.fill(); g.fillStyle = '#a8a69a'; ell(g,x,y,8.5,5.6); g.fill(); g.fillStyle = '#c7c5b8'; ell(g,x-2,y-1.5,4.6,2.8); g.fill(); g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1; ell(g,x,y,8.5,5.6); g.stroke(); }
+  for(let i=0;i<16;i++){ const x = R()*W, y = R()*VH; if(!isFree(x,y,16)) continue; g.fillStyle = 'rgba(20,30,10,.2)'; ell(g,x+2,y+3,9,3.6); g.fill(); g.fillStyle = '#a8a69a'; ell(g,x,y,8.5,5.6); g.fill(); g.fillStyle = '#c7c5b8'; ell(g,x-2,y-1.5,4.6,2.8); g.fill(); g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1; ell(g,x,y,8.5,5.6); g.stroke(); }
   /* 가장자리 산울타리 */
   const hedge = (x,y) => { g.fillStyle = '#4a6a38'; circ(g,x,y,17); g.fill(); g.fillStyle = '#4f9447'; circ(g,x-3,y-4,12); g.fill(); g.fillStyle = '#6bb25a'; circ(g,x-5,y-7,6); g.fill(); };
   const post = (x,y) => { g.fillStyle = '#5a5f50'; g.fillRect(x-1.5,y-14,3,16); };
   const wire = (x1,y1,x2,y2) => { g.strokeStyle = 'rgba(70,74,62,.9)'; g.lineWidth = 1.2; [-12,-7,-2].forEach(o => { g.beginPath(); g.moveTo(x1,y1+o); g.lineTo(x2,y2+o); g.stroke(); }); };
-  g.fillStyle = '#3f5530'; g.fillRect(0,0,W,12); g.fillRect(0,H-12,W,12); g.fillRect(0,0,12,H); g.fillRect(W-12,0,12,H);
-  wire(0,16,W,16); wire(0,H-4,W,H-4); wire(5,0,5,H); wire(W-5,0,W-5,H);
-  for(let x=0;x<=W;x+=40){ post(x,16); post(x,H-4); }
-  for(let y=0;y<=H;y+=40){ post(5,y+14); post(W-5,y+14); }
+  drawApron(g,R);   // 위병소 밖 공터(울타리보다 먼저 그려서 울타리가 위에 오게)
+  const G0 = GATE.x-52, G1 = GATE.x+52;   // 울타리가 열려 있는 위병소 통로
+  g.fillStyle = '#3f5530'; g.fillRect(0,0,W,12); g.fillRect(0,VH-12,G0,12); g.fillRect(G1,VH-12,W-G1,12); g.fillRect(0,0,12,VH); g.fillRect(W-12,0,12,VH);
+  wire(0,16,W,16); wire(0,VH-4,G0,VH-4); wire(G1,VH-4,W,VH-4); wire(5,0,5,VH); wire(W-5,0,W-5,VH);
+  for(let x=0;x<=W;x+=40){ post(x,16); if(x<G0-6||x>G1+6) post(x,VH-4); }
+  for(let y=0;y<=VH;y+=40){ post(5,y+14); post(W-5,y+14); }
   for(let x=20;x<W;x+=40){ g.strokeStyle = 'rgba(70,74,62,.7)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x-2,4); g.lineTo(x+2,8); g.moveTo(x+2,4); g.lineTo(x-2,8); g.stroke(); }
   return c;
 }
@@ -846,7 +929,7 @@ function buildOuter(){
   g.translate(MARGIN,MARGIN);
   const gr = g.createLinearGradient(0,-MARGIN,0,H+MARGIN); gr.addColorStop(0,'#587436'); gr.addColorStop(1,'#4d6a30'); g.fillStyle = gr; g.fillRect(-MARGIN,-MARGIN,W+MARGIN*2,H+MARGIN*2);
   for(let i=0;i<420;i++){ const x = -MARGIN+R()*(W+MARGIN*2), y = -MARGIN+R()*(H+MARGIN*2), r = 24+R()*70; g.fillStyle = R()<.5 ? 'rgba(52,80,34,.28)' : 'rgba(150,170,90,.12)'; g.beginPath(); g.ellipse(x,y,r,r*.55,0,0,7); g.fill(); }
-  const outside = (x,y) => x<-25 || x>W+25 || y<-15 || y>H+95;
+  const outside = (x,y) => x<-25 || x>W+25 || y<-15 || (y>VH+60 && !(x>AX0-40 && x<AX1+40));
   const pts = [];
   for(let i=0;i<4000 && pts.length<230;i++){
     const x = -MARGIN+30+R()*(W+MARGIN*2-60), y = -MARGIN+50+R()*(H+MARGIN*2-70);
@@ -921,20 +1004,157 @@ function truck(c, x, y){
   c.fillStyle = '#ffe9a8'; rr(c,64,-22,5,6,2); c.fill();
   c.restore();
 }
-function gatehouse(c, x, y, t){
-  c.save(); c.translate(x,y); c.lineJoin = 'round';
-  c.fillStyle = 'rgba(20,30,10,.28)'; ell(c,4,4,76,11); c.fill();
-  [[-42,-3],[-26,-3],[-34,-10]].forEach(([sx,sy]) => { c.fillStyle = '#bda878'; rr(c,sx-9,sy-6,18,9,4); c.fill(); c.strokeStyle = 'rgba(60,44,20,.6)'; c.lineWidth = 1; c.stroke(); });
-  c.fillStyle = '#d9cfa3'; rr(c,-6,-58,46,56,3); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.5; c.stroke();
-  c.fillStyle = '#56673a'; c.beginPath(); c.moveTo(-12,-56); c.lineTo(46,-56); c.lineTo(40,-70); c.lineTo(-6,-70); c.closePath(); c.fill(); c.stroke();
-  c.fillStyle = '#9fc4cf'; rr(c,0,-48,16,16,2); c.fill(); c.stroke(); rr(c,22,-48,12,16,2); c.fill(); c.stroke();
-  c.fillStyle = '#4b5a35'; rr(c,10,-26,18,24,2); c.fill(); c.stroke();
-  c.fillStyle = '#f4efd6'; rr(c,-2,-66,40,10,2); c.fill(); c.fillStyle = '#2f3d1f'; c.font = '700 8px '+FONT; c.textAlign = 'center'; c.fillText('위병소',18,-58);
-  c.strokeStyle = '#6b6f5a'; c.lineWidth = 3; c.beginPath(); c.moveTo(52,-2); c.lineTo(52,-26); c.stroke();
-  const bl = -Math.PI/2 + .02;   // 차단봉(내려진 모양)
-  for(let i=0;i<8;i++){ c.fillStyle = i%2 ? '#f4efd6' : '#c8362e'; c.fillRect(52+i*8,-30,8,4.5); } c.strokeStyle = OL; c.lineWidth = 1; c.strokeRect(52,-30,64,4.5);
-  c.fillStyle = '#6b6f5a'; rr(c,48,-4,8,6,2); c.fill();
+/* ----- 위병소(정문) ----- */
+function star5(c, x, y, r){ c.beginPath(); for(let i=0;i<10;i++){ const q = i%2 ? r*.45 : r, a = i*Math.PI/5 - Math.PI/2; c.lineTo(x+Math.cos(a)*q, y+Math.sin(a)*q); } c.closePath(); }
+function sandBag(c, x, y){ c.fillStyle = '#bda878'; rr(c,x,y,14,8,4); c.fill(); c.strokeStyle = 'rgba(60,44,20,.65)'; c.lineWidth = 1; c.stroke(); c.strokeStyle = 'rgba(60,44,20,.3)'; c.beginPath(); c.moveTo(x+4,y+2.5); c.lineTo(x+10,y+2.5); c.stroke(); }
+function guardHouse(c, ox, side, t, night){
+  const w = 136, by = GB;
+  c.save(); c.lineJoin = 'round';
+  c.fillStyle = 'rgba(20,30,10,.3)'; ell(c,ox+w/2+5,by+3,w/2+16,9); c.fill();
+  c.fillStyle = '#8f9082'; rr(c,ox-5,by-9,w+10,10,3); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.3; c.stroke();            // 기단
+  c.fillStyle = '#cdbf90'; rr(c,ox,by-72,w,64,3); c.fill(); c.stroke();                                                      // 벽
+  c.save(); rr(c,ox,by-72,w,64,3); c.clip();
+  c.strokeStyle = 'rgba(90,70,30,.22)'; c.lineWidth = 1; for(let y = by-64; y < by-8; y += 8){ c.beginPath(); c.moveTo(ox,y); c.lineTo(ox+w,y); c.stroke(); }
+  c.fillStyle = '#5c6b3c'; c.fillRect(ox,by-22,w,14); c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(ox,by-22,w,2);
+  c.restore(); c.strokeStyle = OL; c.lineWidth = 1.3; rr(c,ox,by-72,w,64,3); c.stroke();
+  [ox+12, ox+w-12-34].forEach(wx => {   // 철창 달린 창문
+    c.fillStyle = '#6b6f5a'; rr(c,wx-3,by-58,40,30,3); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = night > .3 ? '#ffe9a8' : '#a9cbd6'; rr(c,wx,by-55,34,24,2); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.4)'; c.beginPath(); c.moveTo(wx+3,by-31); c.lineTo(wx+14,by-55); c.lineTo(wx+22,by-55); c.lineTo(wx+11,by-31); c.closePath(); c.fill();
+    c.strokeStyle = '#4a4d52'; c.lineWidth = 1.4; for(let i=1;i<4;i++){ c.beginPath(); c.moveTo(wx+i*8.5,by-55); c.lineTo(wx+i*8.5,by-31); c.stroke(); }
+    c.strokeStyle = OL; c.lineWidth = 1; rr(c,wx,by-55,34,24,2); c.stroke();
+  });
+  c.fillStyle = '#4b5a35'; rr(c,ox+54,by-50,28,42,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();            // 문
+  c.fillStyle = night > .3 ? '#ffe9a8' : '#a9cbd6'; rr(c,ox+60,by-44,16,13,2); c.fill(); c.stroke();
+  c.fillStyle = '#e6d98a'; circ(c,ox+78,by-26,1.7); c.fill();
+  c.fillStyle = '#9a9c8e'; rr(c,ox+52,by-5,32,5,1.5); c.fill(); c.stroke();                                                  // 계단
+  c.fillStyle = '#f4efd6'; rr(c,ox+w/2-27,by-68,54,13,3); c.fill(); c.stroke();                                               // 명패
+  c.fillStyle = '#2f3d1f'; c.font = '700 9.5px '+FONT; c.textAlign = 'center'; c.fillText('위병소',ox+w/2,by-58.2);
+  c.fillStyle = '#c8362e'; rr(c,ox+(side<0 ? 90 : 38),by-22,5,13,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1; c.stroke();   // 소화기
+  const fx = side<0 ? ox+w-13 : ox+13;   // 투광등
+  c.fillStyle = '#5a5f50'; rr(c,fx-6,by-76,12,7,2); c.fill(); c.stroke(); c.fillStyle = '#ffe9a8'; rr(c,fx-4,by-74.5,8,3.6,1.4); c.fill();
+  c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(ox-6,by-72,w+12,5);                                                              // 처마 그림자
+  c.fillStyle = '#56673a'; c.beginPath(); c.moveTo(ox-11,by-70); c.lineTo(ox+w+11,by-70); c.lineTo(ox+w-8,by-114); c.lineTo(ox+8,by-114); c.closePath(); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.5; c.stroke();
+  c.save(); c.clip();
+  for(let k=1;k<5;k++){ const yy = by-70-k*8.8; c.strokeStyle = 'rgba(30,44,18,.35)'; c.lineWidth = 1; c.beginPath(); c.moveTo(ox-20,yy); c.lineTo(ox+w+20,yy); c.stroke();
+    for(let x = ox-12+(k%2)*8; x < ox+w+14; x += 16){ c.beginPath(); c.moveTo(x,yy); c.lineTo(x,yy+8.8); c.stroke(); } }
+  c.fillStyle = 'rgba(255,255,255,.1)'; c.fillRect(ox,by-114,w,5);
   c.restore();
+  c.fillStyle = '#6f8450'; rr(c,ox+6,by-118,w-12,6,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();            // 용마루
+  if(side<0){   // 안테나
+    const ax = ox+26; c.strokeStyle = '#4a4d52'; c.lineWidth = 2; c.beginPath(); c.moveTo(ax,by-118); c.lineTo(ax,by-162); c.stroke();
+    c.lineWidth = 1.4; [-132,-143,-153].forEach((dy,i) => { c.beginPath(); c.moveTo(ax-9+i*2,by+dy); c.lineTo(ax+9-i*2,by+dy); c.stroke(); });
+  } else {      // 경광등
+    const bx = ox+w-26, on = Math.sin(t*5) > 0; c.fillStyle = '#5a5f50'; rr(c,bx-8,by-126,16,9,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.1; c.stroke();
+    c.fillStyle = on ? '#ff5240' : '#8a2a22'; c.beginPath(); c.arc(bx,by-126,7,Math.PI,0); c.closePath(); c.fill(); c.stroke();
+    if(on){ c.fillStyle = 'rgba(255,82,64,.22)'; circ(c,bx,by-128,17); c.fill(); }
+  }
+  const sx0 = side<0 ? ox : ox+w-52;   // 문 앞 모래주머니
+  for(let r=0;r<2;r++) for(let i=0;i<(r ? 3 : 4);i++) sandBag(c,sx0+i*12.5+(r ? 6 : 0),by-1-r*7+4);
+  c.restore();
+}
+function sandNest(c, cx, by){   /* 가장자리 모래주머니 참호(기관총 거치) */
+  c.save(); c.lineJoin = 'round'; c.fillStyle = 'rgba(20,30,10,.28)'; ell(c,cx,by+3,40,7); c.fill();
+  for(let r=0;r<3;r++) for(let i=0;i<5-r;i++) sandBag(c,cx-33+r*7+i*13,by-r*7-4);
+  c.fillStyle = '#2f3236'; rr(c,cx-12,by-31,26,5,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1; c.stroke();
+  c.fillStyle = '#4a4d52'; rr(c,cx+10,by-33,16,3,1.4); c.fill(); c.stroke(); c.fillStyle = '#2f3236'; c.fillRect(cx-3,by-26,3,6); c.fillRect(cx+4,by-26,3,6);
+  c.restore();
+}
+function gateArch(c, t, night){
+  const gx = GATE.x, by = GB;
+  c.save(); c.lineJoin = 'round';
+  [gx-72, gx+52].forEach(x0 => {
+    c.fillStyle = 'rgba(20,30,10,.28)'; ell(c,x0+10,by+3,18,5); c.fill();
+    c.fillStyle = '#a79d86'; rr(c,x0-2,by-8,24,9,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.3; c.stroke();
+    c.fillStyle = '#b5a98a'; rr(c,x0,by-112,20,106,2); c.fill(); c.stroke();
+    c.save(); rr(c,x0,by-112,20,106,2); c.clip(); c.strokeStyle = 'rgba(80,64,40,.35)'; c.lineWidth = 1;
+    for(let y=by-108,k=0;y<by-6;y+=9,k++){ c.beginPath(); c.moveTo(x0,y); c.lineTo(x0+20,y); c.stroke(); const off = k%2 ? 6 : 13; c.beginPath(); c.moveTo(x0+off,y); c.lineTo(x0+off,y+9); c.stroke(); }
+    c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(x0+2,by-110,4,102); c.fillStyle = 'rgba(0,0,0,.14)'; c.fillRect(x0+15,by-110,5,102);
+    c.restore();
+    c.fillStyle = '#8f9082'; rr(c,x0-3,by-118,26,8,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = '#4a4d52'; rr(c,x0+8,by-127,4,10,1); c.fill();
+    c.fillStyle = night > .3 ? '#fff0b8' : '#f2e7b8'; circ(c,x0+10,by-133,7); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();
+  });
+  c.fillStyle = 'rgba(0,0,0,.22)'; rr(c,gx-76,by-124,156,36,6); c.fill();
+  c.fillStyle = '#44532e'; rr(c,gx-78,by-128,156,36,6); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.8; c.stroke();
+  c.fillStyle = '#5d7040'; rr(c,gx-73,by-123,146,26,4); c.fill();
+  c.fillStyle = '#e7c46a'; [[gx-70,by-120],[gx+70,by-120],[gx-70,by-100],[gx+70,by-100]].forEach(([x,y]) => { circ(c,x,y,1.6); c.fill(); });
+  c.fillStyle = '#e7c46a'; [gx-57,gx+57].forEach(x => { star5(c,x,by-110,7); c.fill(); c.strokeStyle = OL; c.lineWidth = 1; c.stroke(); });
+  c.textAlign = 'center'; c.font = '400 17px '+FONT; c.lineWidth = 3.2; c.strokeStyle = 'rgba(80,44,14,.85)'; c.strokeText('복귀마을',gx,by-106); c.fillStyle = '#ffe08a'; c.fillText('복귀마을',gx,by-106);
+  c.font = '400 9px '+FONT; c.lineWidth = 2.4; c.strokeText('충성! 위병소',gx,by-97.5); c.fillStyle = '#fff6dc'; c.fillText('충성! 위병소',gx,by-97.5);
+  c.restore();
+}
+function gateMain(c, t, night){ guardHouse(c,GATE.x-208,-1,t,night); guardHouse(c,GATE.x+72,1,t,night); gateArch(c,t,night); }
+function gateBarrier(c, a){   // 차단봉: 사람이 가까이 오면 올라가요
+  const gx = GATE.x, by = GB;
+  c.save(); c.lineJoin = 'round';
+  c.fillStyle = '#5a5f50'; rr(c,gx-54,by-34,14,40,3); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.2; c.stroke();
+  c.fillStyle = a > .6 ? '#4ccf6a' : '#e24a3a'; circ(c,gx-47,by-29,2.6); c.fill();
+  c.fillStyle = '#6b6f5a'; rr(c,gx+43,by-26,7,26,2); c.fill(); c.stroke();
+  c.translate(gx-47,by-20); c.rotate(-a*1.32);
+  for(let i=0;i<8;i++){ c.fillStyle = i%2 ? '#f4efd6' : '#c8362e'; c.fillRect(i*12.2,-4,12.2,8); }
+  c.strokeStyle = OL; c.lineWidth = 1.1; c.strokeRect(0,-4,97.6,8);
+  c.restore();
+}
+function busStop(c, x, y){
+  c.save(); c.translate(x,y); c.lineJoin = 'round';
+  c.fillStyle = 'rgba(20,30,10,.25)'; ell(c,0,2,40,6); c.fill();
+  c.fillStyle = 'rgba(169,203,214,.55)'; rr(c,-30,-48,60,34,2); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.1; c.stroke();
+  c.fillStyle = '#6b6f5a'; c.fillRect(-32,-50,3,50); c.fillRect(29,-50,3,50);
+  c.fillStyle = '#56673a'; rr(c,-38,-60,76,11,3); c.fill(); c.stroke();
+  c.fillStyle = '#8a5a34'; rr(c,-24,-20,48,6,2); c.fill(); c.stroke(); c.fillStyle = '#5e4128'; c.fillRect(-21,-14,3,14); c.fillRect(18,-14,3,14);
+  c.fillStyle = '#6b6f5a'; c.fillRect(43,-74,3,74); c.fillStyle = '#3d6f8a'; rr(c,35,-88,26,24,4); c.fill(); c.stroke();
+  c.fillStyle = '#fff'; c.font = '700 8.5px '+FONT; c.textAlign = 'center'; c.fillText('🚌',48,-76); c.fillText('버스',48,-67);
+  c.restore();
+}
+function noticeBoard(c, x, y){
+  c.save(); c.translate(x,y); c.lineJoin = 'round';
+  c.fillStyle = 'rgba(20,30,10,.25)'; ell(c,0,2,28,5); c.fill();
+  c.fillStyle = '#6b6f5a'; c.fillRect(-18,-40,3,42); c.fillRect(15,-40,3,42);
+  c.fillStyle = '#6b4a2e'; rr(c,-30,-62,60,40,4); c.fill(); c.strokeStyle = OL; c.lineWidth = 1.3; c.stroke();
+  c.fillStyle = '#f4efd6'; rr(c,-26,-58,52,32,2); c.fill();
+  c.fillStyle = '#2f3d1f'; c.textAlign = 'center'; c.font = '700 9px '+FONT; c.fillText('출입 안내',0,-48.5);
+  c.font = '600 7.5px '+FONT; c.fillText('1. 이름 말하기',0,-40); c.fillText('2. 경례 구호',0,-32.5); c.fillText('3. 입장 🫡',0,-25.5);
+  c.restore();
+}
+function stopSign(c, x, y){
+  c.save(); c.translate(x,y); c.fillStyle = 'rgba(20,30,10,.25)'; ell(c,0,1,8,3); c.fill();
+  c.fillStyle = '#6b6f5a'; c.fillRect(-1.5,-36,3,37);
+  c.fillStyle = '#c8362e'; c.beginPath(); for(let i=0;i<8;i++){ const a = Math.PI/8 + i*Math.PI/4; c.lineTo(Math.cos(a)*11,-40+Math.sin(a)*11); } c.closePath(); c.fill(); c.strokeStyle = '#f4efd6'; c.lineWidth = 1.4; c.stroke();
+  c.fillStyle = '#fff'; c.font = '700 7px '+FONT; c.textAlign = 'center'; c.fillText('정지',0,-37.6);
+  c.restore();
+}
+function exitSign(c, x, y){
+  c.save(); c.translate(x,y); c.fillStyle = 'rgba(20,30,10,.25)'; ell(c,0,1,9,3); c.fill();
+  c.fillStyle = '#6b6f5a'; c.fillRect(-1.5,-30,3,31);
+  c.fillStyle = '#3d6f8a'; rr(c,-30,-52,60,24,4); c.fill(); c.strokeStyle = '#f4efd6'; c.lineWidth = 1.4; c.stroke();
+  c.fillStyle = '#fff'; c.font = '700 9.5px '+FONT; c.textAlign = 'center'; c.fillText('부대 밖 ▼',0,-36);
+  c.restore();
+}
+function drawApron(g, R){   /* 위병소 밖 공터: 풀밭, 길, 포장 마당, 정지선, 방지턱, 나가는 길 */
+  const gx = GATE.x, top = VH-18, hh = H-top;
+  g.fillStyle = '#3f5a2c'; rr(g,AX0-9,top,AX1-AX0+18,hh-4,28); g.fill();
+  const gr = g.createLinearGradient(0,top,0,H); gr.addColorStop(0,'#93ae5e'); gr.addColorStop(1,'#7a994d');
+  g.fillStyle = gr; rr(g,AX0,top,AX1-AX0,hh-12,24); g.fill();
+  for(let i=0;i<60;i++){ const x = AX0+10+R()*(AX1-AX0-20), y = VH+10+R()*(H-VH-34); g.fillStyle = R()<.5 ? 'rgba(104,138,62,.25)' : 'rgba(200,210,130,.2)'; ell(g,x,y,14+R()*22,6+R()*9); g.fill(); }
+  for(let i=0;i<90;i++){ const x = AX0+14+R()*(AX1-AX0-28), y = VH+10+R()*(H-VH-40); g.strokeStyle = 'rgba(70,128,44,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x,y); g.lineTo(x-2,y-5); g.moveTo(x,y); g.lineTo(x+1,y-6); g.moveTo(x,y); g.lineTo(x+3,y-4); g.stroke(); }
+  const fcol = ['#ffffff','#ffd54a','#ff8fab','#b39ddb'];
+  for(let i=0;i<26;i++){ const x = AX0+16+R()*(AX1-AX0-32), y = VH+16+R()*(H-VH-44); g.fillStyle = fcol[Math.floor(R()*4)]; for(let p=0;p<5;p++){ circ(g,x+Math.cos(p*1.256)*2,y+Math.sin(p*1.256)*2,1.6); g.fill(); } g.fillStyle = '#ffd54a'; circ(g,x,y,1.2); g.fill(); }
+  g.fillStyle = '#a89868'; rr(g,gx-44,VH-30,88,H-VH+14,14); g.fill();                    // 길
+  g.fillStyle = '#d9cca0'; rr(g,gx-38,VH-30,76,H-VH+10,12); g.fill();
+  const cob = ['#cfc08f','#e2d6ae','#c8b985','#d9cca0'];
+  for(let i=0;i<260;i++){ g.fillStyle = cob[Math.floor(R()*4)]; circ(g,gx-34+R()*68,VH-26+R()*(H-VH-6),1+R()*1.8); g.fill(); }
+  g.fillStyle = '#8a7f5c'; rr(g,gx-176,VH+4,352,104,18); g.fill();                          // 포장 마당
+  g.fillStyle = '#c8bc95'; rr(g,gx-170,VH+8,340,96,15); g.fill();
+  g.strokeStyle = 'rgba(120,104,66,.35)'; g.lineWidth = 1;
+  for(let x=gx-170+34;x<gx+170;x+=34){ g.beginPath(); g.moveTo(x,VH+10); g.lineTo(x,VH+102); g.stroke(); }
+  for(let y=VH+8+32;y<VH+104;y+=32){ g.beginPath(); g.moveTo(gx-168,y); g.lineTo(gx+168,y); g.stroke(); }
+  g.fillStyle = 'rgba(255,252,235,.95)'; g.fillRect(gx-38,VH+92,76,5);                       // 정지선
+  g.font = '400 13px '+FONT; g.textAlign = 'center'; g.fillText('정 지',gx,VH+84);
+  g.strokeStyle = 'rgba(255,230,120,.8)'; g.lineWidth = 2.4; g.setLineDash([12,10]); g.beginPath(); g.moveTo(gx,VH+112); g.lineTo(gx,H-18); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#34343a'; g.fillRect(gx-38,1158,76,11);                                      // 방지턱
+  for(let i=0;i<8;i++){ g.fillStyle = '#e8c53a'; g.fillRect(gx-38+i*9.5,1158,4.75,11); }
+  g.fillStyle = 'rgba(255,252,235,.92)'; g.textAlign = 'center'; g.font = '400 22px '+FONT; g.fillText('▼',gx,1196); g.font = '400 12px '+FONT; g.fillText('나가는 길',gx,1226);
 }
 function fitSign(c, x, y){
   c.save(); c.translate(x,y); c.lineJoin = 'round';
@@ -1104,7 +1324,16 @@ function emote(i){ const e = EMOTES[i]; say(me,e,2500); net.send({ t:'say', text
 
 /* ---------- logic ---------- */
 function blocked(x,y){
-  if(x<34||y<46||x>W-34||y>H-30) return true;
+  if(x<34||y<46||x>W-34||y>H-24) return true;
+  if(y>VH-30){   /* 마을 아래 울타리: 위병소 가운데 통로로만 드나들어요 */
+    if(y<VH+34){ if(Math.abs(x-GATE.x)>=50) return true; }
+    else{
+      if(x<AX0+14||x>AX1-14) return true;
+      for(const o of OUT_BLOCKS) if(x>o[0]&&x<o[2]&&y>o[1]&&y<o[3]) return true;
+      for(const q of SENTRIES) if(Math.hypot(x-q.x,y-q.y)<11) return true;
+    }
+  }
+  if(y>950 && (Math.abs(Math.abs(x-GATE.x)-140)<68 || Math.abs(Math.abs(x-GATE.x)-237)<27)) return true;   // 위병소 건물·모래주머니 참호
   for(const b of BUILDINGS){ if(x>b.x-8 && x<b.x+b.w+8 && y>b.y+34 && y<b.y+b.h+2) return true; }
   for(const t of TREES){ if(Math.hypot(x-t.x,(y-t.y)*1.3)<13*t.s) return true; }
   for(const r of FIT_BLOCKS) if(x>r[0] && x<r[2] && y>r[1] && y<r[3]) return true;
@@ -1131,6 +1360,7 @@ function update(dt){
   let dx=0, dy=0;
   if(keys.ArrowLeft||keys.a) dx-=1; if(keys.ArrowRight||keys.d) dx+=1;
   if(keys.ArrowUp||keys.w) dy-=1; if(keys.ArrowDown||keys.s) dy+=1;
+  if(frozen){ dx = 0; dy = 0; target = null; }   // 위병소 대화 중에는 움직이지 않아요
   if((dx||dy||target) && me.act) stand();   // 움직이면 자리에서 일어나요
   if(dx||dy){ target=null; const l=Math.hypot(dx,dy); move(me, dx/l*me.speed*dt, dy/l*me.speed*dt); }
   else if(target){
@@ -1138,6 +1368,7 @@ function update(dt){
     if(d<5) target=null; else if(!move(me, tx/d*me.speed*dt, ty/d*me.speed*dt)) target=null;
   }
   if(me.sayT>0) me.sayT-=dt;
+  if(started && !frozen && me.y > EXIT_Y) askExit();   // 위병소 밖 아래쪽 길로 더 내려가려 하면 나갈지 물어봐요
 
   /* 다른 접속자: 서버에서 받은 위치로 부드럽게 따라가요 */
   net.players.forEach(r => {
@@ -1183,6 +1414,7 @@ function update(dt){
   { const ri = repInfo(me);
     if(ri && ri.n > (me._rep||0) && ri.n % 10 === 0){ const line = '🔥 '+ri.n+'개 달성!'; say(me,line,3000); net.send({ t:'say', text:line }); }
     me._rep = ri ? ri.n : 0; }
+  stepGate(dt);
   stepAct(dt);
   nearB = null;
   for(const b of BUILDINGS){ if(Math.hypot(me.x-b.door.x, me.y-b.door.y)<52){ nearB=b; break; } }
@@ -1193,13 +1425,24 @@ function update(dt){
   else if(me.act) $('#enterBtn').textContent = '🧍 일어나기';
   else if(nearI) $('#enterBtn').textContent = nearI.label;
 
-  cam.x += (me.x-cam.x)*Math.min(1,dt*6); cam.y += (me.y-cam.y)*Math.min(1,dt*6);
+  cam.x += (me.x-cam.x)*Math.min(1,dt*6); cam.y += (me.y+camBias-cam.y)*Math.min(1,dt*6);
   const onl = net.on ? '🟢 접속 중 <b>'+(net.players.size+1)+'</b>명'
     : '마을 주민 <b>'+(npcs.length+1)+'</b>명 <span style="font-weight:400;color:var(--muted)">(예시 · 오프라인)</span>';
   if(onl !== onlLast){ onlLast = onl; $('#online').innerHTML = onl; }
   if($('#plist').classList.contains('show')) renderPlist();
 }
 let onlLast = '', plistLast = '';
+/* 위병소: 초병이 지나가는 사람에게 경례하고, 사람이 가까이 오면 차단봉이 올라가요 */
+const SENTRY_CALLS = ['🫡','🫡 수고하십니다!'];
+function stepGate(dt){
+  SENTRIES.forEach(q => { if(q.salT>0) q.salT -= dt; if(q.cd>0) q.cd -= dt; if(q.sayT>0 && q.sayT<900) q.sayT -= dt; });
+  const actors = []; if(started) actors.push(me); net.players.forEach(r => actors.push(r));
+  SENTRIES.forEach(q => { if(dlgOpen || q.sayT>0 || q.cd>0) return; if(actors.some(a => Math.hypot(a.x-q.x,a.y-q.y) < 95)){ q.cd = 7; q.salT = 1.3; q.say = SENTRY_CALLS[Math.floor(Math.random()*SENTRY_CALLS.length)]; q.sayT = 2.3; } });
+  barrier.hold = Math.max(0, barrier.hold-dt);
+  const near = actors.some(a => Math.hypot(a.x-GATE.x,a.y-GB) < 150);
+  barrier.a += (((near || barrier.hold>0) ? 1 : 0) - barrier.a) * Math.min(1, dt*3.2);
+  camBias += ((dlgOpen ? 80 : 0) - camBias) * Math.min(1, dt*4);
+}
 /* 접속 중인 사람 목록 (접속 칸을 누르면 열려요) */
 function renderPlist(){
   const others = (net.on ? [...net.players.values()] : npcs).map(p => p.name || '이름 없음');
@@ -1234,6 +1477,9 @@ function lightList(t){
   L.push({ x:CAMP.x, y:CAMP.y-14, r:165+Math.sin(t*11)*7, k:1 });
   allPledges().forEach(l => L.push({ x:l.x, y:l.y-36, r:58, k:.8 }));
   L.push({ x:WELCOME.x, y:WELCOME.y-54, r:104, k:.75 });
+  L.push({ x:GATE.x-62, y:GB-134, r:132, k:.95 }); L.push({ x:GATE.x+62, y:GB-134, r:132, k:.95 });
+  [GATE.x-140, GATE.x+140].forEach(hx => L.push({ x:hx, y:GB-44, r:78, k:.8 }));
+  L.push({ x:1232, y:1058, r:72, k:.7 });
   L.push({ x:me.x, y:me.y-16, r:76, k:.5 });
   return L;
 }
@@ -1272,14 +1518,21 @@ function render(t, dt){
   items.push({ y:CAMP.y+6, f:() => campfire(ctx,t) });
   TENTS.forEach(q => items.push({ y:q.y, f:() => tent(ctx,q.x,q.y,q.s) }));
   items.push({ y:TRUCK.y, f:() => truck(ctx,TRUCK.x,TRUCK.y) });
-  items.push({ y:GATE.y, f:() => gatehouse(ctx,GATE.x,GATE.y,t) });
+  items.push({ y:GB, f:() => gateMain(ctx,t,tod.n) });
+  items.push({ y:GB+9, f:() => gateBarrier(ctx,barrier.a) });
+  [GATE.x-237, GATE.x+237].forEach(nx => items.push({ y:GB, f:() => sandNest(ctx,nx,GB) }));
+  items.push({ y:1142, f:() => busStop(ctx,936,1142) });
+  items.push({ y:1080, f:() => noticeBoard(ctx,1232,1080) });
+  items.push({ y:1102, f:() => stopSign(ctx,GATE.x+77,1102) });
+  items.push({ y:1200, f:() => exitSign(ctx,GATE.x-83,1200) });
+  SENTRIES.forEach(q => items.push({ y:q.y, f:() => person(ctx,q,q.x,q.y,false) }));
   items.push({ y:FIT_SIGN.y, f:() => fitSign(ctx,FIT_SIGN.x,FIT_SIGN.y) });
   [...new Set(PULL_POS.map(q => q[1]))].forEach(row => items.push({ y:row+1, f:() => pullFrame(ctx,row) }));
   EX.filter(e => e.kind==='bench').forEach(e => items.push({ y:e.y-1, f:() => benchStation(ctx,e) }));
   items.push({ y:581, f:() => bagStation(ctx,t) });
   allPledges().forEach((l,i) => items.push({ y:l.y, f:() => lanternFloat(ctx,l,t,i) }));
   items.push({ y:PLAY.y+10, f:() => swingSet(ctx,t) });
-  const people = net.on ? [...net.players.values()] : npcs;
+  const people = net.on ? [...net.players.values()] : (started ? npcs : []);   // 위병소를 통과하기 전에는 예시 주민을 숨겨요
   const onSwing = p => !!p.act && p.act.startsWith('swing');   // 그네 탄 사람은 그네와 함께 그려요
   people.forEach(n => { if(!onSwing(n)) items.push({ y:n.y, f:() => person(ctx,n,n.x,n.y,false) }); });
   if(!onSwing(me)) items.push({ y:me.y, f:() => { if(!me.act){ ctx.strokeStyle = '#ff9b3d'; ctx.lineWidth = 2.2; ell(ctx,me.x,me.y+2,14,5.4); ctx.stroke(); } person(ctx,me,me.x,me.y,false); } });
@@ -1310,6 +1563,7 @@ function render(t, dt){
   /* 이름표·말풍선은 어둠 위에 */
   people.forEach(n => drawRepBadge(ctx,n)); drawRepBadge(ctx,me);
   people.forEach(n => { const v = visPos(n,t); tag(ctx,n,v.x,v.y,false); if(n.sayT>0) bubble(ctx,n.say,v.x,v.y-34); });
+  SENTRIES.forEach(q => { tag(ctx,q,q.x,q.y,false); if(q.sayT>0 && q.say) bubble(ctx,q.say,q.x,q.y-34); });
   { const v = visPos(me,t); tag(ctx,me,v.x,v.y,true); if(me.sayT>0) bubble(ctx,me.say,v.x,v.y-34); }
   /* 겹쳐 있어도 가장 가까운 등불 하나만 보여줘요 */
   let near = null, nd = 70;
@@ -1408,6 +1662,7 @@ $('#helpBtn').onclick = () => openCard(`
     <div class="tip"><i>🚶</i><span>방향키·WASD로 이동하거나, 바닥을 클릭/탭하면 그곳으로 걸어가요.</span></div>
     <div class="tip"><i>🏠</i><span>건물 입구에 가까이 가면 <b>입장</b> 버튼(또는 E)이 나타나요.</span></div>
     <div class="tip"><i>🫡</i><span>경례(F)로 근처 주민에게 인사해요.</span></div>
+    <div class="tip"><i>🚪</i><span>맨 아래 위병소 밖으로 나가려 하면 "복귀마을을 나가겠습니까?"라고 물어봐요. 다시 들어올 때는 초병이 이름과 경례 구호를 확인해요.</span></div>
     <div class="tip"><i>🪑</i><span>벤치·통나무 앞에서 E를 누르면 앉아요. 움직이면 일어나요.</span></div>
     <div class="tip"><i>🏋️</i><span>체력단련장(왼쪽 위)에서 철봉, 벤치프레스, 제자리 멀리뛰기, 아령, 샌드백을 E로 이용해요. 움직이면 끝나요.</span></div>
     <div class="tip"><i>🎠</i><span>놀이터(오른쪽 아래 모닥불 위)에서 그네를 탈 수 있어요.</span></div>
