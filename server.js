@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 /* 기록은 DATA_DIR(배포 환경에서는 지워지지 않는 디스크 경로)에 저장해요 */
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA = path.join(DATA_DIR, 'data.json');
-const BUILDING_IDS = ['job', 'cert', 'trip', 'rest', 'story', 'soon'];
+const BUILDING_IDS = ['job', 'cert', 'trip', 'rest', 'story', 'soon', 'love'];
 const MAX_PLAYERS = 100;                 // 동시 접속 최대 인원 (서버 1대)
 const KEEP_POSTS = 5000, KEEP_PLEDGES = 1000;   // 서버에 보관하는 최대 개수 (사실상 영구)
 const PLEDGE_HOURS = 24;                        // 다짐 등불이 마을에 걸려 있는 시간(지나면 화면에서만 사라지고 기록은 남아요)
@@ -226,6 +226,62 @@ const broadcast = (m, except) => { const s = JSON.stringify(m); for (const [ws] 
 const pub = p => ({ id: p.id, name: p.name, uni: p.uni, cap: p.cap, x: p.x, y: p.y, dir: p.dir, act: p.act || null });
 const okAct = a => a === 'sit' || /^(swing[01]|pull[0-3]|bench[01]|jump[01]|curl[01]|punch0)$/.test(a || '');   // 앉기·그네·체력단련 기구 자세
 
+/* ---------- 안내 NPC(길잡이·말년선임) ----------
+   서버가 직접 걷고 말해서, 같은 시각에는 누가 보든 같은 자리에서 같은 말을 해요(길 지점은 index.html의 GN과 같게 유지).
+   한 NPC에는 한 번에 한 사람만 말을 걸 수 있어요(다른 사람은 끝날 때까지 기다려요). 대화 내용 자체는 각자 화면에서만 이뤄져요. */
+const GN = { S0: [1020, 842], S1: [1140, 842], N8: [1080, 900], N7: [800, 900], N6: [520, 900], N4: [520, 600], L: [520, 520], N1: [520, 330], N2: [800, 330], N3: [1080, 330], R: [1080, 520], N5: [1080, 600], PL: [600, 520], PR: [1000, 520], PT: [800, 412] };
+const GE = [['S0', 'N8'], ['S1', 'N8'], ['N8', 'N7'], ['N7', 'N6'], ['N6', 'N4'], ['N4', 'L'], ['L', 'N1'], ['N1', 'N2'], ['N2', 'N3'], ['N3', 'R'], ['R', 'N5'], ['N5', 'N8'], ['L', 'PL'], ['PL', 'PT'], ['PT', 'N2'], ['PT', 'PR'], ['PR', 'R']];
+const GAT = {}; GE.forEach(([a, b]) => { (GAT[a] = GAT[a] || []).push(b); (GAT[b] = GAT[b] || []).push(a); });
+const NPC_LINES = {
+  guide0: ['🧭 처음 오셨나요? E를 눌러 말을 걸어 보세요!', '🧭 마을이 궁금하면 저한테 오세요!', '안녕하세요! 🫡'],
+  guide1: ['☕ 어서 와요! 마을 생활 팁 알려 드릴게요', '저한테 E로 말을 걸어 보세요', '오늘도 수고 많았어요 🫡'],
+};
+const NPC_WALK_LINES = ['🧭 마을 구경 중이에요', '궁금한 게 있으면 불러 주세요!', '오늘도 좋은 하루 보내세요 🫡', '건물에 들어가 보셨나요?'];
+const NPC_TALK_MS = 75000;   // 말을 걸어 놓고 이만큼 아무 반응이 없으면 자리를 비워 줘요
+const pickOne = a => a[Math.floor(Math.random() * a.length)];
+const mkNpc = (id, node, wait, dir) => ({ id, node, x: GN[node][0], y: GN[node][1], to: null, prev: null, wait, dir, mv: 0, say: '', sid: 0, sayUntil: 0, cd: wait, talkId: 0, talk: '', talkAt: 0, dirty: true });
+const npcs = [mkNpc('guide0', 'S0', 3, 1), mkNpc('guide1', 'S1', 8, -1)];
+const npcPub = n => ({ id: n.id, x: Math.round(n.x), y: Math.round(n.y), dir: n.dir, mv: n.mv, say: n.sayUntil > Date.now() ? n.say : '', sid: n.sid, talk: n.talk, talkId: n.talkId });
+const npcSay = (n, text) => { n.say = text; n.sid++; n.sayUntil = Date.now() + 4200; n.dirty = true; };
+const npcRelease = n => { if (n.talkId) { n.talkId = 0; n.talk = ''; n.dirty = true; } };
+let lastNpcT = Date.now();
+setInterval(() => {
+  const now = Date.now(), dt = Math.min(0.5, (now - lastNpcT) / 1000); lastNpcT = now;
+  const ps = [...players.values()].filter(p => p.joined);
+  npcs.forEach(n => {
+    if (n.talkId && (!ps.some(p => p.id === n.talkId) || now - n.talkAt > NPC_TALK_MS)) npcRelease(n);
+    const talker = n.talkId ? ps.find(p => p.id === n.talkId) : null;
+    let near = null, nd = 1e9; ps.forEach(p => { const d = Math.hypot(p.x - n.x, p.y - n.y); if (d < nd) { nd = d; near = p; } });
+    const watching = near && nd < 110, wasMv = n.mv; n.mv = 0;
+    if (n.say && n.sayUntil <= now) { n.say = ''; n.dirty = true; }
+    n.cd -= dt;
+    if (near && nd < 200 && n.cd <= 0 && !talker) { n.cd = 40; npcSay(n, pickOne(NPC_LINES[n.id])); }
+    if (talker || watching) {   // 말 거는 사람이나 가까이 온 사람을 바라보며 서 있어요
+      const f = talker || near, d2 = f.x < n.x ? -1 : 1; if (d2 !== n.dir) { n.dir = d2; n.dirty = true; }
+    } else if (n.wait > 0) n.wait -= dt;
+    else {
+      if (!n.to) {
+        const taken = npcs.filter(o => o !== n).flatMap(o => [o.node, o.to]);
+        const nb = GAT[n.node] || []; let c2 = nb.filter(k => k !== n.prev && !taken.includes(k)); if (!c2.length) c2 = nb.filter(k => !taken.includes(k));
+        const list = c2.length ? c2 : nb;
+        if (list.length) {   // 가끔은 입구 쪽으로 돌아와서, 처음 온 사람이 찾기 쉽게 해요
+          n.to = Math.random() < 0.3 ? list.slice().sort((a, b) => Math.hypot(GN[a][0] - 1080, GN[a][1] - 880) - Math.hypot(GN[b][0] - 1080, GN[b][1] - 880))[0] : pickOne(list);
+        } else n.wait = 3;
+      }
+      if (n.to) {
+        const T = GN[n.to], dx = T[0] - n.x, dy = T[1] - n.y, dist = Math.hypot(dx, dy);
+        if (dist < 4) {
+          n.prev = n.node; n.node = n.to; n.to = null; n.wait = 2 + Math.random() * 5;
+          if (Math.random() < 0.25) npcSay(n, pickOne(NPC_WALK_LINES));
+        } else { const sp = Math.min(dist, 54 * dt); n.x += dx / dist * sp; n.y += dy / dist * sp; if (Math.abs(dx) > 0.5) n.dir = dx < 0 ? -1 : 1; n.mv = 1; }
+      }
+    }
+    if (wasMv !== n.mv) n.dirty = true;
+  });
+  const ch = npcs.filter(n => n.dirty || n.mv);
+  if (ch.length) { broadcast({ t: 'npcs', n: ch.map(npcPub) }); ch.forEach(n => { n.dirty = false; }); }
+}, 200).unref();
+
 const ipConns = new Map();   // 한 주소에서 동시에 열 수 있는 연결 수
 const MAX_PER_IP = 12;       // 부대·학교처럼 여럿이 같은 주소를 쓸 수 있어서 넉넉하게
 wss.on('connection', (ws, req) => {
@@ -251,7 +307,7 @@ wss.on('connection', (ws, req) => {
       me.uid = typeof m.uid === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.uid) ? m.uid : 'conn-' + me.id; // 브라우저 고유 번호(좋아요 1회 제한용)
       logVisit('in', me, now);
       const recent = {}; BUILDING_IDS.forEach(id => { recent[id] = postsFor(id, me.uid); });
-      send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: livePledges(), posts: recent });
+      send(ws, { t: 'init', id: me.id, players: [...players.values()].filter(p => p !== me).map(pub), pledges: livePledges(), posts: recent, npcs: npcs.map(npcPub) });
       broadcast({ t: 'join', p: pub(me) }, ws);
       return;
     }
@@ -327,10 +383,22 @@ wss.on('connection', (ws, req) => {
       const n = post.likes.length;
       broadcast({ t: 'like', b: m.b, id: post.id, n }, ws);
       send(ws, { t: 'like', b: m.b, id: post.id, n, you: true });
+    } else if (m.t === 'npc') {
+      /* 안내 NPC에게 말 걸기: 한 번에 한 사람만. talk(걸기) · ping(아직 대화 중) · bye(끝) */
+      const n = npcs.find(x => x.id === m.id); if (!n) return;
+      if (m.op === 'talk') {
+        const holder = n.talkId && n.talkId !== me.id && now - n.talkAt < NPC_TALK_MS && [...players.values()].some(p => p.id === n.talkId);
+        if (holder) return send(ws, { t: 'npcbusy', id: n.id, name: n.talk });
+        if (Math.hypot(me.x - n.x, me.y - n.y) > 170) return send(ws, { t: 'npcfar', id: n.id });
+        npcs.forEach(o => { if (o !== n && o.talkId === me.id) npcRelease(o); });   // 한 사람이 두 NPC를 동시에 붙잡지 못하게
+        n.talkId = me.id; n.talk = me.name; n.talkAt = now; n.dirty = true;
+        send(ws, { t: 'npcok', id: n.id });
+      } else if (m.op === 'ping') { if (n.talkId === me.id) n.talkAt = now; }
+      else if (m.op === 'bye') { if (n.talkId === me.id) npcRelease(n); }
     }
   });
 
-  ws.on('close', () => { if (players.delete(ws)) { broadcast({ t: 'leave', id: me.id }); const t = Date.now(); logVisit('out', me, t, Math.round((t - (me.joinedAt || t)) / 1000)); } });
+  ws.on('close', () => { if (players.delete(ws)) { npcs.forEach(n => { if (n.talkId === me.id) npcRelease(n); }); broadcast({ t: 'leave', id: me.id }); const t = Date.now(); logVisit('out', me, t, Math.round((t - (me.joinedAt || t)) / 1000)); } });
   ws.on('error', () => {});
 });
 

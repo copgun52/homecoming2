@@ -148,6 +148,14 @@
   .gbtns{display:flex;gap:8px;justify-content:flex-end}.gbtns:empty{display:none}
   .ghost{background:var(--paper2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:700}
   body.gate .hud,body.gate .bar,body.gate .hint,body.gate #log{display:none}
+  .nlog{max-height:min(44vh,330px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px 2px 8px}
+  .nm{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.6;white-space:pre-line;word-break:keep-all}
+  .nm.bot{background:#fff;border:1px solid var(--line);align-self:flex-start;border-top-left-radius:4px}
+  .nm.me{background:var(--olive);color:#fff;align-self:flex-end;border-top-right-radius:4px}
+  .nchips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+  .nchip{background:var(--paper2);border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:700;color:var(--ink)}
+  .nrow{display:flex;gap:8px}.nrow input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:#fff;color:var(--ink)}
+  .nnote{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
   .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30}
   .toast.show{opacity:1}
   .emo{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;display:none;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 8px;box-shadow:0 3px 0 var(--line),0 8px 18px rgba(0,0,0,.28);z-index:7}
@@ -240,8 +248,8 @@ const BUILDINGS = [
     route:[[520,600],[520,900],[250,900]],
     desc:'여행, 워킹홀리데이, 해외 경험',
     example:'전역하고 첫 여행을 다녀오신 분 계신가요? 예산은 어떻게 잡으셨는지 궁금해요.' },
-  { id:'rest', theme:'cafe', name:'쉼터', emoji:'🍵', x:680, y:680, w:240, h:150, wall:'#e2d6a8', roof:'#7a7a3e', trim:'#55551f',
-    route:[[520,600],[520,900],[800,900]],
+  { id:'rest', theme:'cafe', name:'쉼터', emoji:'🍵', x:560, y:680, w:200, h:150, wall:'#e2d6a8', roof:'#7a7a3e', trim:'#55551f',
+    route:[[520,600],[520,900],[660,900]],
     desc:'막막할 때, 마음 이야기',
     example:'전역하고 나니 괜히 불안하고 막막한 날이 많아요. 여러분은 그런 날 어떻게 보내세요?' },
   { id:'story', theme:'cabin', name:'군대 썰방', emoji:'🔥', x:1230, y:680, w:240, h:150, wall:'#b59a66', roof:'#6a4d33', trim:'#46321f',
@@ -250,6 +258,12 @@ const BUILDINGS = [
     cta:'썰 풀기', ph:'그때 있었던 일, 지금 돌아보니 어떤가요?',
     notice:'부대 이름·위치, 훈련·작전 내용 등 군사 기밀이 될 수 있는 내용과 실명 비방은 쓰지 마세요.',
     example:'행군이 끝나고 처음 한 샤워가 군 생활 중 가장 행복한 순간이었어요. 여러분의 최고의 순간은 언제였나요?' },
+  { id:'love', theme:'love', name:'연애상담소', emoji:'💌', x:830, y:680, w:200, h:150, wall:'#e6d2bf', roof:'#a8545f', trim:'#7a3a44',
+    route:[[1080,600],[1080,900],[930,900]],
+    cta:'연애 고민 남기기', ph:'기다려 준 사람, 전역 후 만남, 이별… 고민을 편하게 남겨 보세요',
+    desc:'전역 후 연애, 곰신·꽃신, 이별과 새로운 만남 상담',
+    notice:'상대방의 실명·연락처·SNS 계정 등 개인정보와 특정인을 향한 비방은 쓰지 마세요.',
+    example:'기다려준 여자친구에게 너무 고마워서 선물을 주고 싶어요 어떤 선물이 좋을까요' },
 ];
 BUILDINGS.forEach(b => {
   b.door = { x: b.x + b.w/2, y: b.y + b.h + 22 };
@@ -292,8 +306,13 @@ const AX0 = 880, AX1 = 1280;                      // 위병소 밖 공터의 왼
 const SPAWN = { x:GATE.x, y:1132 };               // 처음 들어올 때 서 있는 자리
 const EXIT_Y = 1214;                              // 이보다 더 내려가려 하면 "나가겠습니까?"
 const SENTRIES = [
-  { name:'초병', uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x-64, y:GATE.y+40, dir:1,  step:0, say:'', sayT:0, salT:0, cd:0 },
-  { name:'초병', uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x+64, y:GATE.y+40, dir:-1, step:0, say:'', sayT:0, salT:0, cd:0 },
+  { name:'🪖 초병', npc:true, uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x-64, y:GATE.y+40, dir:1,  step:0, say:'', sayT:0, salT:0, cd:0 },
+  { name:'🪖 초병', npc:true, uni:'#55633a', cap:'#44532e', guard:true, x:GATE.x+64, y:GATE.y+40, dir:-1, step:0, say:'', sayT:0, salT:0, cd:0 },
+];
+/* 마을 안내 NPC 두 명(위병소 안쪽 길목). 대화는 내 화면에서만 이뤄져요 */
+const GUIDES = [
+  { id:'guide0', npc:true, node:'S0', wait:2, name:'🧭 길잡이',   emoji:'🧭', title:'길잡이',   label:'💬 길잡이와 이야기하기',   uni:'#6b7f4a', cap:'#d9d2bd', x:GATE.x-60, y:842, dir:1,  step:0, say:'', sayT:0, cd:3 },
+  { id:'guide1', npc:true, node:'S1', wait:6, name:'☕ 말년선임', emoji:'☕', title:'말년선임', label:'💬 말년선임과 이야기하기', uni:'#4f6d8f', cap:'#e0b13a', x:GATE.x+60, y:842, dir:-1, step:0, say:'', sayT:0, cd:9 },
 ];
 const OUT_BLOCKS = [[906,1112,966,1142],[1208,1066,1256,1080],[GATE.x+70,1088,GATE.x+84,1102],[GATE.x-90,1188,GATE.x-76,1200]];
 const FIT_SIGN = { x:458, y:396 };
@@ -355,6 +374,7 @@ const INTERACTS = [
   ...SEATS,
   ...EX,
   ...SWINGS.map(s => ({ id:s.id, kind:'swing', x:s.ax, y:PLAY.y+14, dir:1, label:'🎠 그네 타기', r:42 })),
+  ...GUIDES.map(g => ({ id:g.id, kind:'npc', get x(){ return g.x; }, get y(){ return g.y; }, get label(){ return g.talk && g.talkId!==net.id ? '⏳ '+g.title+'는 '+g.talk+'님과 대화 중' : g.label; }, r:66 })),   // 돌아다니는 NPC라서 지금 서 있는 자리를 따라가요
   { id:'wish', kind:'wish', x:PLAZA.x, y:PLAZA.y-22, label:'🪙 기념 분수에 소원 빌기', r:98 },
   { id:'fw', kind:'fireworks', x:WELCOME.x, y:WELCOME.y+22, label:'🎆 축하 폭죽 터뜨리기', r:58 },
 ];
@@ -396,7 +416,11 @@ function connect(){
   ws.onopen = () => ws.send(JSON.stringify({ t:'join', uid:myUid(), name:me.name, uni:me.uni, cap:me.cap, x:me.x, y:me.y }));
   ws.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch(_){ return; }
-    if(m.t==='init'){ net.on=true; net.id=m.id; net.players.clear(); m.players.forEach(addRemote); net.pledges=m.pledges||[]; net.posts=m.posts||{}; toast('🌐 실시간으로 연결됐어요'); }
+    if(m.t==='init'){ net.on=true; net.id=m.id; net.players.clear(); m.players.forEach(addRemote); net.pledges=m.pledges||[]; net.posts=m.posts||{}; if(m.npcs) applyNpcs(m.npcs, true); toast('🌐 실시간으로 연결됐어요'); }
+    else if(m.t==='npcs') applyNpcs(m.n, false);
+    else if(m.t==='npcok'){ if(pendingTalk && pendingTalk.id===m.id){ const g = pendingTalk; pendingTalk = null; g.talk = me.name; g.talkId = net.id; openGuide(g); } }
+    else if(m.t==='npcbusy'){ const g = GUIDES.find(x => x.id===m.id); pendingTalk = null; if(g){ g.talk = m.name; toast(m.name+'님이 '+g.title+'와 대화 중이에요. 잠시 후에 다시 말을 걸어 주세요'); } }
+    else if(m.t==='npcfar'){ pendingTalk = null; toast('조금 더 가까이 가서 말을 걸어 주세요'); }
     else if(m.t==='join') addRemote(m.p);
     else if(m.t==='leave') net.players.delete(m.id);
     else if(m.t==='move'){ const r=net.players.get(m.id); if(r){ r.tx=m.x; r.ty=m.y; r.dir=m.dir; r.act=null; } }
@@ -636,6 +660,19 @@ function person(c, p, x, y, label){
   }
 }
 function tag(c, p, x, y, mine){
+  if(p.npc){   /* NPC는 파란 이름표에 노란 "NPC" 딱지가 붙어서 사람과 구별돼요 */
+    c.font = '600 11.5px '+FONT; c.textAlign = 'center';
+    const tw = c.measureText(p.name).width, pw = 30, w = tw + pw + 18, x0 = x-w/2;
+    c.fillStyle = 'rgba(40,86,112,.95)'; rr(c,x0,y-56,w,18,9); c.fill(); c.strokeStyle = '#e7c46a'; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = '#e7c46a'; rr(c,x0+2,y-54,pw,14,7); c.fill();
+    c.fillStyle = '#3a2f22'; c.font = '700 9.5px '+FONT; c.fillText('NPC', x0+2+pw/2, y-43.8);
+    c.fillStyle = '#fff'; c.font = '600 11.5px '+FONT; c.fillText(p.name, x0+pw+10+tw/2, y-43.5);
+    if(p.talk){   // 누가 말을 걸고 있으면 발밑에 표시해서 다른 사람이 기다려야 한다는 걸 알려요
+      const s = '💬 '+p.talk+'님과 대화 중'; c.font = '600 10.5px '+FONT; const sw = c.measureText(s).width + 14;
+      c.fillStyle = 'rgba(200,80,40,.94)'; rr(c,x-sw/2,y+8,sw,16,8); c.fill(); c.fillStyle = '#fff'; c.fillText(s,x,y+19.5);
+    }
+    return;
+  }
   c.font = '600 11.5px '+FONT; c.textAlign = 'center';
   const w = c.measureText(p.name).width + 14;
   c.fillStyle = mine ? 'rgba(217,130,43,.95)' : 'rgba(40,36,28,.78)'; rr(c,x-w/2,y-55,w,16,8); c.fill();
@@ -765,6 +802,26 @@ function drawBuilding(g, b){
     g.fillStyle = '#4b5a3a'; rr(g,w+14,h-34,22,15,2); g.fill(); g.strokeStyle = OL; g.lineWidth = 1; g.stroke();
     g.fillStyle = '#e8d9a8'; g.font = '700 8px '+FONT; g.textAlign = 'center'; g.fillText('썰',w+25,h-23);
   }
+  if(T==='love'){
+    const heart = (x, y, s, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(x,y+s*.35); g.bezierCurveTo(x-s*1.1,y-s*.5,x-s*.45,y-s*1.15,x,y-s*.45); g.bezierCurveTo(x+s*.45,y-s*1.15,x+s*1.1,y-s*.5,x,y+s*.35); g.closePath(); g.fill(); g.strokeStyle = OL; g.lineWidth = 1; g.stroke(); };
+    awning(g,w/2-42,70,84,'#a8545f','#f6e6d8',14);
+    /* 지붕 하트 장식 */
+    heart(w/2,18,16,'#d9707f'); heart(w/2-34,26,8,'#e8a0aa'); heart(w/2+34,26,8,'#e8a0aa');
+    /* 하트 깃발 줄 */
+    g.strokeStyle = 'rgba(60,40,20,.6)'; g.lineWidth = 1.2; g.beginPath(); for(let i=0;i<=20;i++){ const x = i*w/20, y = 52+Math.sin(i/20*Math.PI)*8; i ? g.lineTo(x,y) : g.moveTo(x,y); } g.stroke();
+    for(let i=1;i<20;i+=2){ const x = i*w/20, y = 52+Math.sin(i/20*Math.PI)*8; heart(x,y+7,5,i%4===1?'#d9707f':'#f2c6a0'); }
+    /* 마음 우체통 */
+    g.fillStyle = '#6b4a2e'; g.fillRect(w+10,h-30,4,30);
+    g.fillStyle = '#c9505f'; rr(g,w+2,h-52,20,24,6); g.fill(); g.strokeStyle = OL; g.lineWidth = 1.3; g.stroke();
+    g.fillStyle = '#7a2f3a'; g.fillRect(w+6,h-42,12,3);
+    heart(w+12,h-31,4,'#fff3ea');
+    g.fillStyle = '#fffaf0'; rr(g,w+14,h-60,12,9,1.5); g.fill(); g.strokeStyle = OL; g.lineWidth = 1; g.stroke(); g.beginPath(); g.moveTo(w+14,h-60); g.lineTo(w+20,h-55); g.lineTo(w+26,h-60); g.stroke();
+    /* 문 앞 벤치 + 상담중 팻말 */
+    g.fillStyle = '#8a5e3a'; rr(g,-30,h-12,42,6,2); g.fill(); g.fillRect(-26,h-6,4,6); g.fillRect(4,h-6,4,6); g.fillRect(-30,h-26,42,4); g.fillStyle = '#6b4a2e'; g.fillRect(-28,h-22,2,10); g.fillRect(8,h-22,2,10);
+    g.fillStyle = '#f6e6d8'; rr(g,w/2+40,h-44,30,14,3); g.fill(); g.strokeStyle = '#7a3a44'; g.lineWidth = 1.5; g.stroke();
+    g.fillStyle = '#a8545f'; g.font = '700 8px '+FONT; g.textAlign = 'center'; g.fillText('상담중',w/2+55,h-34);
+    pot(g,w/2-66,h-4,'#b5774a');
+  }
   if(T==='calendar'){
     g.strokeStyle = '#6b4a2e'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(w-8,h-6); g.lineTo(w+4,h-44); g.moveTo(w+28,h-6); g.lineTo(w+16,h-44); g.moveTo(w+10,h-6); g.lineTo(w+10,h-40); g.stroke();
     g.fillStyle = '#fffdf6'; rr(g,w-6,h-70,34,42,3); g.fill(); g.strokeStyle = OL; g.lineWidth = 1.3; g.stroke();
@@ -820,7 +877,7 @@ function buildSign(){
   g.fillStyle = '#e7c46a'; circ(g,0,-139,5); g.fill(); g.stroke();
   g.font = '700 10.5px '+FONT; g.textAlign = 'center';
   BUILDINGS.forEach((b,i) => {
-    const y = -126+i*21, ar = b.x<500 ? '◀' : (b.x>1000 ? '▶' : (b.north ? '▲' : '▼'));
+    const y = -126+i*18.5, ar = b.x<500 ? '◀' : (b.x>1000 ? '▶' : (b.north ? '▲' : '▼'));
     g.save(); g.translate(0,y); g.rotate((i%2?1:-1)*.035);
     g.fillStyle = 'rgba(0,0,0,.18)'; rr(g,-55,3,110,17,4); g.fill();
     g.fillStyle = '#566a3a'; rr(g,-55,1,110,17,4); g.fill(); g.strokeStyle = '#2f3d1f'; g.lineWidth = 1.4; g.stroke();
@@ -1306,6 +1363,8 @@ function useInteract(it){
     if(seatTaken(it)){ toast('이미 누가 쓰고 있어요'); return; }
     target = null; me.x = it.x; me.y = it.y; me.dir = it.dir||1; me.act = it.id; me.actAt = performance.now(); sendAct();
     if(it.line){ say(me,it.line,3500); net.send({ t:'say', text:it.line }); }
+  } else if(it.kind==='npc'){
+    target = null; talkTo(GUIDES.find(g => g.id===it.id));
   } else if(it.kind==='wish'){
     if(now-wishAt<1600) return; wishAt = now;
     coins.push({ sx:me.x, sy:me.y-30, t:0 }); const line = '🪙 소원을 빌었어요'; say(me,line,3200); net.send({ t:'say', text:line });
@@ -1319,11 +1378,134 @@ function actKey(){   // E 키·버튼: 건물 입장 → 일어서기 → 눈앞
   if(inModal || !started) return;
   if(nearB) openBuilding(nearB); else if(me.act) stand(); else if(nearI) useInteract(nearI);
 }
+/* ---------- 마을 안내 NPC 대화 ----------
+   외부 AI를 쓰지 않는 무료 방식이에요. 미리 써 둔 마을 안내를 질문의 낱말과 맞춰 보고 답해요.
+   마을 이야기와 간단한 인사·시간·날짜 질문 말고는 "잘 모르겠어요"라고 해요. 대화는 서버에 보내지 않아요. */
+let tourDone = !!store.get('hv_tour', false);
+const norm = q => q.replace(/[^0-9a-zA-Z가-힣ㄱ-ㅎㅏ-ㅣ]/g,'').toLowerCase();
+const nowText = () => new Date().toLocaleTimeString('ko-KR', { hour:'numeric', minute:'2-digit' });
+const todayText = () => new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+const TOUR = [
+  '1/5  🚶 이동\n방향키나 WASD로 걷고, 바닥을 클릭·탭하면 그곳으로 걸어가요. 오른쪽의 ＋ － 버튼이나 마우스 휠, 폰에서는 두 손가락으로 화면 크기를 바꿀 수 있어요.',
+  '2/5  🏠 건물 7곳\n위 줄은 왼쪽부터 💼 취업관, 📚 자격증 도서관, 📅 전역 준비관, 아래 줄은 🧳 여행사, 🍵 쉼터, 💌 연애상담소, 🔥 군대 썰방이에요. 문 앞에 서면 \'입장\' 버튼(E)이 나와요.',
+  '3/5  ✍️ 이야기 나누기\n건물에 들어가면 이용 안내와 예시 글, 글 남기기 칸, 선배들의 인기 글이 있어요. 읽기만 해도 괜찮고, 공감(좋아요)과 댓글, 내 글도 남길 수 있어요.',
+  '4/5  🏮 오늘의 다짐\n화면 아래 \'오늘의 다짐\' 버튼으로 한 줄을 적으면 광장 근처에 등불로 걸려요. 24시간 뒤에는 마을에서 사라져요.',
+  '5/5  🏋️ 놀거리와 약속\n체력단련장(왼쪽 가운데), 놀이터 그네, 모닥불, 분수 소원, 폭죽이 있어요. 군사기밀이 될 수 있는 내용과 실명 비방, 개인정보는 올리지 마세요. 궁금한 건 언제든 물어보세요!'
+];
+const KB = [
+  { p:100, k:['죽고싶','자살','자해','극단적'], a:'많이 힘드신가 봐요. 혼자 견디지 마세요.\n지금 위험하다고 느끼면 109(자살예방상담전화)나 119에 바로 연락해 주세요. 쉼터에서 이야기를 나눌 수도 있지만, 급할 때는 전문 상담이 먼저예요.', c:['쉼터는 어떤 곳이에요?'] },
+  { k:['안녕','하이','헬로','반가','ㅎㅇ'], a:'안녕하세요! 복귀마을에 오신 걸 환영해요 🫡 마을에 대해 궁금한 걸 편하게 물어보세요.' },
+  { k:['고마','감사','수고','땡큐'], a:'별말씀을요! 또 궁금한 게 있으면 언제든 불러 주세요 🫡' },
+  { k:['잘가','안녕히','바이','다음에'], a:'조심히 가세요! 또 놀러 오세요 🫡' },
+  { k:['누구','이름이뭐','정체','ai','에이아이','사람이','봇','npc','엔피씨','너는뭐','뭐하는애'], a:'저는 마을 안내를 맡은 NPC예요. 사람이 아니라 미리 준비된 안내를 바탕으로 답하는 자동 응답이에요. 복귀마을과 간단한 인사·시간·날짜 질문에는 답해 드릴 수 있어요.' },
+  { k:['몇시','지금시간','현재시간','시계'], a:() => '지금은 '+nowText()+'이에요.' },
+  { k:['며칠','몇일','날짜','요일','몇월'], a:() => '오늘은 '+todayText()+'이에요.' },
+  { k:['심심','배고','졸려','피곤'], a:'그럴 땐 체력단련장에서 몸을 풀거나, 모닥불 앞 통나무에 앉아 불멍해 보세요. 쉼터에서 이야기를 나눠도 좋아요.', c:['체력단련장은 어디예요?','모닥불은 어디 있어요?'] },
+  { k:['힘들','우울','막막','불안','외로','걱정','위로','마음'], a:'전역하고 나면 막막한 날이 누구에게나 있어요. 🍵 쉼터(아래 줄 가운데)는 그런 마음 이야기를 나누는 곳이에요. 먼저 다녀간 선배들의 글을 읽어 보거나, 내 이야기를 남겨 보세요. 많이 힘들면 109(자살예방상담전화) 같은 전문 상담도 있어요.', c:['글은 어떻게 남겨요?','쉼터는 어떤 곳이에요?'] },
+  { k:['마을이뭐','무슨곳','뭐하는곳','소개','복귀마을이'], a:'복귀마을은 막 전역해서 뭘 해야 할지 막막한 사람들이 모이는 온라인 마을이에요. 걸어 다니며 건물에 들어가 선배들의 경험을 읽고, 내 고민과 경험도 남길 수 있어요. 로그인 없이 이름만 정하면 바로 참여해요.', c:['건물이 뭐가 있어요?','마을 한 바퀴 설명해 주세요'] },
+  { k:['한바퀴','둘러','투어','처음설명','전체설명','마을설명','설명해'], a:'__tour' },
+  { k:['건물','어디가','장소','뭐가있','공간'], a:'건물은 7곳이에요.\n위 줄(왼쪽부터): 💼 취업관, 📚 자격증 도서관, 📅 전역 준비관\n아래 줄: 🧳 여행사, 🍵 쉼터, 💌 연애상담소, 🔥 군대 썰방\n문 앞에 서면 \'입장\' 버튼(E)이 나와요.', c:['취업관은 어떤 곳이에요?','군대 썰방은 어떤 곳이에요?'] },
+  { k:['취업','이력서','면접','취업관'], a:'💼 취업관은 위 줄 왼쪽 건물이에요. 공채·수시채용, 이력서, 면접 준비 이야기를 나눠요. 군 경력을 이력서에 어떻게 쓰는지 같은 질문이 잘 어울려요.' },
+  { k:['자격증','도서관','어학','공시','스터디'], a:'📚 자격증 도서관은 위 줄 가운데 건물이에요. 자격증·어학·공시 준비 이야기와 스터디 모집을 나눠요.' },
+  { k:['전역준비','준비관','곧전역','전역전','말년'], a:'📅 전역 준비관은 위 줄 오른쪽 건물이에요. 곧 전역하는 사람들이 걱정과 준비 상황을 나누고, 먼저 나간 선배들의 조언을 받는 곳이에요.' },
+  { k:['여행','여행사','워홀','워킹홀리데이','해외'], a:'🧳 여행사는 아래 줄 왼쪽 건물이에요. 여행, 워킹홀리데이, 해외 경험 이야기를 나눠요.' },
+  { k:['쉼터','카페'], a:'🍵 쉼터는 아래 줄 왼쪽에서 두 번째 건물이에요. 막막할 때, 마음 이야기를 나누는 곳이에요.' },
+  { k:['연애','상담소','곰신','꽃신','여자친구','남자친구','이별','소개팅'], a:'💌 연애상담소는 아래 줄 가운데, 쉼터 오른쪽 건물이에요. 전역 후 연애, 기다려 준 사람과의 재회, 이별과 새로운 만남 고민을 나눠요. 상대방 실명·연락처 같은 개인정보는 쓰지 마세요.' },
+  { k:['썰방','썰','군대이야기','군대얘기'], a:'🔥 군대 썰방은 아래 줄 오른쪽 건물이에요. 군대에서 있었던 웃긴 일, 힘들었던 일을 풀어 놓는 곳이에요. 부대 이름·위치나 훈련·작전 내용 같은 군사기밀은 쓰면 안 돼요.' },
+  { k:['글쓰','글은','글을','글남','남기','게시','올리','작성','등록'], a:'건물 문 앞에서 입장(E)을 누르면 창이 열려요. 이용 안내, 예시 글, 글 남기기 칸, 인기 글, 전체 글이 순서대로 있어요. 예시를 참고해서 편하게 써 보세요. 다른 사람 글에는 공감과 댓글도 달 수 있어요.', c:['공감은 어떻게 눌러요?','마을 규칙이 뭐예요?'] },
+  { k:['좋아요','공감','댓글'], a:'글마다 공감(좋아요)을 누를 수 있고, 한 글에는 브라우저 하나당 한 번만 눌러져요. 댓글도 남길 수 있어요.' },
+  { k:['신고','부적절','욕설','비방'], a:'부적절한 글이나 댓글은 신고 버튼으로 알려 주세요. 여러 명이 신고하면 글이 일단 가려지고, 운영자가 확인해요.' },
+  { k:['다짐','등불','소원등'], a:'화면 아래 \'🏮 오늘의 다짐\' 버튼으로 한 줄(30자)을 적으면 광장 근처에 등불로 걸려요. 24시간이 지나면 마을 화면에서 사라져요.' },
+  { k:['움직','이동','걷','조작','키보드','방향키','wasd'], a:'방향키나 WASD로 걷고, 바닥을 클릭·탭하면 그곳으로 걸어가요. 건물이나 기구 앞에 서면 버튼(E)이 나와요.' },
+  { k:['폰으로','폰에서','폰도','모바일','핸드폰','스마트폰','터치'], a:'폰에서는 화면을 탭하면 그곳으로 걸어가고, 두 손가락으로 모으고 벌려서 확대·축소해요. 건물·기구 앞에 서면 나오는 버튼을 누르세요.' },
+  { k:['확대','축소','줌','크기','작게','크게','잘안보'], a:'오른쪽의 ＋ － 버튼, 마우스 휠, 폰에서는 두 손가락 모으기·벌리기로 크기를 바꿔요. \'기본\'을 누르면 원래대로 돌아와요.' },
+  { k:['채팅','말풍선','대화방','말하'], a:'아래 입력칸(Enter 키)에 최대 40자까지 쓰면 머리 위 말풍선으로 나와요. 채팅은 부적절한 내용을 확인하려고 운영자가 볼 수 있게 30일간 저장돼요. 개인정보는 적지 마세요.' },
+  { k:['경례','구호','충성'], a:'F 키나 \'🫡 경례\' 버튼을 누르면 입장할 때 정한 구호가 말풍선으로 나와요. 구호를 바꾸려면 새로고침하고 위병소에서 \'정보 바꾸기\'를 눌러 주세요.' },
+  { k:['감정','표정','이모티콘','이모지'], a:'숫자 1~5 또는 \'표정\' 버튼으로 😄 👏 💪 😭 🫡 중 하나를 머리 위에 띄워요.' },
+  { k:['체력단련','운동','철봉','턱걸이','벤치프레스','멀리뛰기','아령','샌드백','헬스','기구'], a:'체력단련장은 마을 왼쪽 가운데에 있어요. 철봉(턱걸이, 4자리), 벤치프레스, 제자리 멀리뛰기, 아령, 샌드백이 있고, 기구 앞에서 E를 누르면 시작해요. 움직이면 끝나요. 턱걸이와 벤치프레스는 횟수를 세고 10개마다 응원 문구가 나와요.', c:['뭐하고 놀 수 있어요?'] },
+  { k:['놀이터','그네'], a:'놀이터는 마을 오른쪽 가운데에 있어요. 그네 2개와 벤치가 있고, 그네 앞에서 E를 누르면 타요.' },
+  { k:['모닥불','불멍','통나무','캠프'], a:'모닥불은 놀이터 바로 아래쪽 오른쪽에 있어요. 통나무 앞에서 E를 누르면 앉아서 불멍을 할 수 있어요.' },
+  { k:['분수','소원','동전'], a:'광장 한가운데 분수 가까이에서 E를 누르면 동전을 던지며 소원을 빌 수 있어요.' },
+  { k:['폭죽','불꽃','축하'], a:'광장의 환영 표지판 앞에서 E를 누르면 모두가 볼 수 있는 폭죽을 터뜨려요. 몇 초에 한 번만 돼요.' },
+  { k:['벤치','앉','의자','쉬고'], a:'벤치나 통나무 앞에서 E를 누르면 앉아요. 움직이면 일어나요.' },
+  { k:['놀수있','뭐하고놀','재밌','할수있','할거리','놀거리'], a:'체력단련장 운동, 놀이터 그네, 모닥불 불멍, 분수 소원 빌기, 축하 폭죽, 벤치에 앉아 쉬기, 감정 표현이 있어요. 다른 주민에게 경례로 인사도 해 보세요!', c:['체력단련장은 어디예요?','경례는 어떻게 해요?'] },
+  { k:['접속','몇명','누가있','누구있','주민','사람들'], a:() => net.on ? '지금 마을에 '+(net.players.size+1)+'명이 접속해 있어요. 화면 위 \'접속 중\' 칸을 누르면 이름 목록이 보여요.' : '화면 위 \'마을 주민\' 칸을 누르면 이름 목록이 보여요. 지금은 서버 연결이 없어서 예시 주민만 보여요.' },
+  { k:['시간대','밤','낮','노을','어두','밝'], a:'화면 위 \'🕒\' 버튼을 누르면 자동 → 낮 → 노을 → 밤 순서로 바뀌어요. 밤에는 가로등과 창문에 불이 켜져요.' },
+  { k:['위병소','나가','종료','로그아웃','퇴장'], a:'마을 맨 아래 위병소 밖, \'나가는 길\' 표시가 있는 길로 더 내려가면 \'복귀마을을 나가겠습니까?\'라고 물어봐요.' },
+  { k:['규칙','금지','기밀','약속','주의'], a:'군사기밀이 될 수 있는 내용(부대 이름·위치, 훈련·작전 내용), 실명 비방, 개인정보는 올리지 마세요. 어긋나는 글은 신고로 알려 주세요.' },
+  { k:['로그인','가입','회원','비밀번호','계정'], a:'로그인이 없어요. 위병소에서 이름과 구호만 정하면 돼요. 좋아요는 브라우저 하나당 한 번이고, 브라우저 저장 데이터를 지우면 달라질 수 있어요.' },
+  { k:['전역일','디데이','d-day'], a:'위병소에서 전역일을 넣으면 화면 위에 \'전역 D+며칠\'이 보여요. 전역 전이면 D-며칠로 보여요. 바꾸려면 새로고침 후 \'정보 바꾸기\'를 눌러 다시 넣어 주세요.' },
+  { k:['적응','처음','뭐부터','추천','팁','어떻게시작','어떻게하'], a:'처음이라면 이렇게 해 보세요.\n① 관심 있는 건물에 들어가 예시와 인기 글 읽기\n② 공감이나 댓글 남기기\n③ \'오늘의 다짐\' 걸어 보기\n④ 체력단련장·모닥불에서 다른 주민에게 경례로 인사하기\n천천히 둘러보셔도 괜찮아요!', c:['마을 한 바퀴 설명해 주세요','글은 어떻게 남겨요?'] },
+  { k:['무료','가격','돈','결제','유료'], a:'복귀마을은 무료예요.' },
+  { k:['오류','버그','안돼','안되','렉','끊겨','멈춰'], a:'먼저 새로고침(F5)을 해 보세요. 계속 안 되면 잠시 뒤에 다시 들어와 주세요.' },
+  { k:['운영자','관리자','문의','연락','만든'], a:'복귀마을은 운영자가 만들어 관리해요. 제가 운영자의 연락처는 알지 못하지만, 문제가 있는 글은 신고 버튼으로 알려 주시면 운영자가 확인해요.' },
+];
+function answerFor(q){
+  const n = norm(q); let best = null, bs = 0;
+  KB.forEach(e => { let sc = 0; e.k.forEach(w => { if(n.includes(norm(w))) sc += norm(w).length; }); if(sc) sc += (e.p||0); if(sc > bs){ bs = sc; best = e; } });
+  if(!best || bs < 2) return { a:'음, 그건 제가 잘 모르는 이야기예요. 저는 복귀마을 안내와 간단한 인사·시간 질문만 답할 수 있어요. 이런 건 어때요?', c:null };
+  return { a: typeof best.a==='function' ? best.a() : best.a, c: best.c || null };
+}
+const CHIPS = { guide0:['마을이 뭐하는 곳이에요?','건물이 뭐가 있어요?','글은 어떻게 남겨요?','어떻게 움직여요?','오늘의 다짐이 뭐예요?'],
+                guide1:['체력단련장은 어디예요?','뭐하고 놀 수 있어요?','채팅은 어떻게 해요?','적응 팁 알려 주세요','마을 규칙이 뭐예요?'] };
+let guideCur = null, tourStep = -1, nBusy = false;
+const nlog = () => $('#nlog');
+function nSay(text, me_){
+  const box = nlog(); if(!box) return;
+  const d = document.createElement('div'); d.className = 'nm '+(me_ ? 'me' : 'bot'); d.textContent = text; box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+function nChips(list){
+  const el = $('#nchips'); if(!el) return; el.innerHTML = '';
+  list.forEach(t => { const b = document.createElement('button'); b.className = 'nchip'; b.textContent = t; b.onclick = () => nAsk(t); el.appendChild(b); });
+}
+function endTour(){ tourStep = -1; tourDone = true; store.set('hv_tour', true); }
+function nextTour(){
+  if(tourStep >= TOUR.length){ endTour(); nSay('설명은 여기까지예요! 이제 직접 돌아다녀 보세요. 궁금한 건 언제든 물어보세요 🫡'); nChips(CHIPS[guideCur.id]); return; }
+  nSay(TOUR[tourStep]); tourStep++;
+  nChips(tourStep >= TOUR.length ? ['설명 끝! 이제 둘러볼게요'] : ['다음','그만 볼래요']);
+}
+function nAsk(text){
+  text = String(text||'').trim().slice(0,40); if(!text || nBusy || !guideCur) return;
+  nSay(text, true); guideAct = Date.now(); net.send({ t:'npc', op:'ping', id:guideCur.id });   // 대화 중이라는 신호(한동안 말이 없으면 자리를 비워요)
+  const inp = $('#nin'); if(inp) inp.value = '';
+  nBusy = true;
+  setTimeout(() => {
+    nBusy = false; if(!nlog()) return;
+    if(tourStep >= 0){   // 마을 한 바퀴 설명 중
+      if(/다음|네|응|계속|좋아|알려/.test(text) && !/그만|괜찮/.test(text)) return nextTour();
+      if(/끝|그만|괜찮|아니|둘러/.test(text)){ if(tourStep >= TOUR.length) { tourStep = TOUR.length; return nextTour(); } endTour(); nSay('알겠어요! 궁금한 건 언제든 물어보세요 🫡'); return nChips(CHIPS[guideCur.id]); }
+    }
+    if(!tourDone && /^(네|응|예|알려|설명)/.test(text) && tourStep < 0 && nlog().dataset.intro === '1'){ nlog().dataset.intro = ''; tourStep = 0; return nextTour(); }
+    if(!tourDone && /괜찮|아니|직접|됐/.test(text) && nlog().dataset.intro === '1'){ nlog().dataset.intro = ''; endTour(); nSay('알겠어요! 궁금한 건 언제든 물어보세요 🫡'); return nChips(CHIPS[guideCur.id]); }
+    const r = answerFor(text);
+    if(r.a === '__tour'){ tourStep = 0; return nextTour(); }
+    nSay(r.a); nChips(r.c || CHIPS[guideCur.id]);
+  }, 380);
+}
+function openGuide(g){
+  if(!g) return; guideCur = g; guideAct = Date.now(); tourStep = -1; nBusy = false;
+  openCard(`
+  <header><div class="ico" style="background:var(--paper2)">${g.emoji}</div><div><h2>${esc(g.title)}</h2><p>마을 안내 NPC · 자동 응답</p></div><button class="x" onclick="window.__close()">×</button></header>
+  <div class="body"><div class="nlog" id="nlog"></div><div class="nchips" id="nchips"></div>
+  <div class="nrow"><input id="nin" type="text" maxlength="40" placeholder="마을에 대해 물어보세요" autocomplete="off"><button class="primary" id="nsend">보내기</button></div>
+  <div class="nnote">저는 사람이 아니라 미리 준비된 안내로 답하는 NPC예요. 복귀마을과 간단한 인사·시간 질문에만 답하고, 이 대화는 서버에 저장되지 않아요.</div></div>`, () => {
+    const inp = $('#nin');
+    $('#nsend').onclick = () => nAsk(inp.value);
+    inp.addEventListener('keydown', e => { e.stopPropagation(); if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); nAsk(inp.value); } else if(e.key==='Escape'){ closeModal(); } });
+    if(!tourDone){
+      nSay(g.id==='guide0' ? '어서 오세요! 저는 길잡이예요 🧭 복귀마을은 막 전역해서 막막한 사람들이 서로 경험을 나누는 마을이에요. 1분 정도로 마을을 설명해 드릴까요?' : '어서 와요, 저는 말년선임이에요 ☕ 마을 생활 팁을 알려 드리는 중이에요. 처음이면 마을 한 바퀴 설명부터 들어 볼래요?');
+      nlog().dataset.intro = '1'; nChips(['네, 알려 주세요','괜찮아요, 직접 볼게요']);
+    } else {
+      nSay(g.id==='guide0' ? '또 오셨네요! 궁금한 게 있으세요?' : '왔어요? 뭐든 물어봐요. 마을 얘기라면 자신 있어요!'); nChips(CHIPS[g.id]);
+    }
+    setTimeout(() => inp.focus(), 80);
+  });
+}
 const EMOTES = ['😄','👏','💪','😭','🫡'];
 function emote(i){ const e = EMOTES[i]; say(me,e,2500); net.send({ t:'say', text:e }); }
 
 /* ---------- logic ---------- */
-function blocked(x,y){
+function blocked(x,y,self){
   if(x<34||y<46||x>W-34||y>H-24) return true;
   if(y>VH-30){   /* 마을 아래 울타리: 위병소 가운데 통로로만 드나들어요 */
     if(y<VH+34){ if(Math.abs(x-GATE.x)>=50) return true; }
@@ -1333,6 +1515,7 @@ function blocked(x,y){
       for(const q of SENTRIES) if(Math.hypot(x-q.x,y-q.y)<11) return true;
     }
   }
+  for(const q of GUIDES) if(q!==self && Math.hypot(x-q.x,y-q.y)<11) return true;
   if(y>950 && (Math.abs(Math.abs(x-GATE.x)-140)<68 || Math.abs(Math.abs(x-GATE.x)-237)<27)) return true;   // 위병소 건물·모래주머니 참호
   for(const b of BUILDINGS){ if(x>b.x-8 && x<b.x+b.w+8 && y>b.y+34 && y<b.y+b.h+2) return true; }
   for(const t of TREES){ if(Math.hypot(x-t.x,(y-t.y)*1.3)<13*t.s) return true; }
@@ -1348,8 +1531,8 @@ function blocked(x,y){
 function move(p,dx,dy){
   if(!dx&&!dy) return false;
   const nx = p.x+dx, ny = p.y+dy; let m=false;
-  if(!blocked(nx,p.y)){ p.x=nx; m=true; }
-  if(!blocked(p.x,ny)){ p.y=ny; m=true; }
+  if(!blocked(nx,p.y,p)){ p.x=nx; m=true; }
+  if(!blocked(p.x,ny,p)){ p.y=ny; m=true; }
   if(dx) p.dir = dx>0?1:-1;
   if(m) p.step += 0.22;
   return m;
@@ -1442,6 +1625,75 @@ function stepGate(dt){
   const near = actors.some(a => Math.hypot(a.x-GATE.x,a.y-GB) < 150);
   barrier.a += (((near || barrier.hold>0) ? 1 : 0) - barrier.a) * Math.min(1, dt*3.2);
   camBias += ((dlgOpen ? 80 : 0) - camBias) * Math.min(1, dt*4);
+  stepGuides(dt);
+}
+/* 안내 NPC는 마을 길을 따라 천천히 돌아다녀요(내 화면에서만). 사람이 가까이 오거나 대화 중이면 멈춰서 바라봐요.
+   아직 마을 설명을 안 들은 사람에게는 입구 근처에서 기다려요 */
+const GN = { S0:[GATE.x-60,842], S1:[GATE.x+60,842], N8:[1080,900], N7:[800,900], N6:[520,900], N4:[520,600], L:[520,520], N1:[520,330], N2:[800,330], N3:[1080,330], R:[1080,520], N5:[1080,600], PL:[600,520], PR:[1000,520], PT:[800,412] };
+const GE = [['S0','N8'],['S1','N8'],['N8','N7'],['N7','N6'],['N6','N4'],['N4','L'],['L','N1'],['N1','N2'],['N2','N3'],['N3','R'],['R','N5'],['N5','N8'],['L','PL'],['PL','PT'],['PT','N2'],['PT','PR'],['PR','R']];
+const GAT = {}; GE.forEach(([a,b]) => { (GAT[a] = GAT[a]||[]).push(b); (GAT[b] = GAT[b]||[]).push(a); });
+const GNEAR = ['S0','S1','N8','N7','N5'];
+const GUIDE_TALK = ['🧭 마을 구경 중이에요','궁금한 게 있으면 불러 주세요!','오늘도 좋은 하루 보내세요 🫡','건물에 들어가 보셨나요?'];
+/* 서버와 연결돼 있으면 NPC의 위치·말·대화 상태를 서버가 정해서, 누가 봐도 똑같아요. 연결이 없을 때만 아래처럼 내 화면에서 혼자 움직여요 */
+let pendingTalk = null;
+function applyNpcs(list, snap){
+  list.forEach(s => {
+    const g = GUIDES.find(x => x.id===s.id); if(!g) return;
+    g.tx = s.x; g.ty = s.y; g.dir = s.dir; g.talk = s.talk || ''; g.talkId = s.talkId || 0;
+    if(snap || Math.hypot(g.x-s.x, g.y-s.y) > 160){ g.x = s.x; g.y = s.y; }
+    if(s.sid !== g.sid){ g.sid = s.sid; if(s.say){ g.say = s.say; g.sayT = 4.2; } }
+    if(guideCur===g && inModal && net.on && g.talkId!==net.id){ closeModal(); toast('시간이 지나 '+g.title+'가 자리를 비웠어요. 다시 말을 걸어 주세요'); }
+  });
+}
+function talkTo(g){
+  if(!g) return;
+  if(!net.on){ openGuide(g); return; }
+  if(g.talk && g.talkId!==net.id){ toast(g.talk+'님이 '+g.title+'와 대화 중이에요. 잠시 후에 다시 말을 걸어 주세요'); return; }
+  pendingTalk = g; net.send({ t:'npc', op:'talk', id:g.id });
+  setTimeout(() => { if(pendingTalk===g) pendingTalk = null; }, 3000);
+}
+let guideAct = 0;   // 마지막으로 NPC와 말을 주고받은 시각(오래 가만히 있으면 서버가 자리를 비워 줘요)
+setInterval(() => { if(guideCur && inModal && Date.now()-guideAct < 50000) net.send({ t:'npc', op:'ping', id:guideCur.id }); }, 25000);
+function stepGuides(dt){
+  if(net.on && GUIDES.every(g => g.tx!=null)){
+    GUIDES.forEach(q => {
+      if(q.sayT>0) q.sayT -= dt;
+      const dx = q.tx-q.x, dy = q.ty-q.y, d = Math.hypot(dx,dy), k = Math.min(1,dt*8);
+      if(d>1){ q.x += dx*k; q.y += dy*k; q.step += dt*10; }
+    });
+    return;
+  }
+  GUIDES.forEach(q => {
+    if(q.sayT>0) q.sayT -= dt; q.cd -= dt;
+    const d = Math.hypot(me.x-q.x, me.y-q.y), talking = inModal && guideCur===q, watching = started && d<110;
+    if(started && d<170 && (talking || watching)) q.dir = me.x<q.x ? -1 : 1;
+    if(!talking && !watching){
+      if(q.wait>0) q.wait -= dt;
+      else {
+        if(!q.to){
+          let nb = GAT[q.node] || []; if(!tourDone){ const f = nb.filter(n => GNEAR.includes(n)); if(f.length) nb = f; }
+          const taken = GUIDES.filter(o => o!==q).flatMap(o => [o.node, o.to]);   // 다른 안내 NPC가 있는/가는 곳은 피해요
+          let c2 = nb.filter(n => n!==q.prev && !taken.includes(n)); if(!c2.length) c2 = nb.filter(n => !taken.includes(n));
+          const list = c2.length ? c2 : nb;
+          if(list.length) q.to = list[Math.floor(Math.random()*list.length)]; else q.wait = 3;
+        }
+        if(q.to){
+          const T = GN[q.to], dx = T[0]-q.x, dy = T[1]-q.y, dist = Math.hypot(dx,dy);
+          if(dist < 12){ q.prev = q.node; q.node = q.to; q.to = null; q.wait = 2+Math.random()*5; q.stuck = 0; if(Math.random()<.25 && tourDone){ q.say = GUIDE_TALK[Math.floor(Math.random()*GUIDE_TALK.length)]; q.sayT = 3; } }
+          else {
+            const bx = q.x, by = q.y; move(q, dx/dist*54*dt, dy/dist*54*dt);
+            if(Math.hypot(q.x-bx,q.y-by) < 54*dt*.3){ q.stuck = (q.stuck||0) + dt; if(q.stuck > 1.2){ q.stuck = 0; const t0 = q.to; q.to = q.node; q.node = t0; q.wait = 1; } }   // 막히면 왔던 길로 돌아가요
+            else q.stuck = 0;
+          }
+        }
+      }
+    }
+    if(started && !inModal && q.cd<=0 && d<(tourDone ? 130 : 240)){
+      q.cd = tourDone ? 45 : 16; q.sayT = 4.2;
+      const lines = tourDone ? ['안녕하세요! 🫡','궁금한 게 있으면 불러 주세요'] : (q.id==='guide0' ? ['🧭 처음 오셨나요? E를 눌러 말을 걸어 보세요!','마을 설명이 필요하면 저한테 오세요!'] : ['☕ 어서 와요! 마을 생활 팁 알려 드릴게요','저한테 E로 말을 걸어 보세요']);
+      q.say = lines[Math.floor(Math.random()*lines.length)];
+    }
+  });
 }
 /* 접속 중인 사람 목록 (접속 칸을 누르면 열려요) */
 function renderPlist(){
@@ -1526,6 +1778,7 @@ function render(t, dt){
   items.push({ y:1102, f:() => stopSign(ctx,GATE.x+77,1102) });
   items.push({ y:1200, f:() => exitSign(ctx,GATE.x-83,1200) });
   SENTRIES.forEach(q => items.push({ y:q.y, f:() => person(ctx,q,q.x,q.y,false) }));
+  GUIDES.forEach(q => items.push({ y:q.y, f:() => { if(!tourDone && started){ ctx.fillStyle = '#ff9b3d'; const ay = q.y-66+Math.sin(t*5)*3; ctx.beginPath(); ctx.moveTo(q.x-6,ay-9); ctx.lineTo(q.x+6,ay-9); ctx.lineTo(q.x,ay); ctx.closePath(); ctx.fill(); ctx.strokeStyle = OL; ctx.lineWidth = 1.2; ctx.stroke(); } person(ctx,q,q.x,q.y,false); } }));
   items.push({ y:FIT_SIGN.y, f:() => fitSign(ctx,FIT_SIGN.x,FIT_SIGN.y) });
   [...new Set(PULL_POS.map(q => q[1]))].forEach(row => items.push({ y:row+1, f:() => pullFrame(ctx,row) }));
   EX.filter(e => e.kind==='bench').forEach(e => items.push({ y:e.y-1, f:() => benchStation(ctx,e) }));
@@ -1564,6 +1817,7 @@ function render(t, dt){
   people.forEach(n => drawRepBadge(ctx,n)); drawRepBadge(ctx,me);
   people.forEach(n => { const v = visPos(n,t); tag(ctx,n,v.x,v.y,false); if(n.sayT>0) bubble(ctx,n.say,v.x,v.y-34); });
   SENTRIES.forEach(q => { tag(ctx,q,q.x,q.y,false); if(q.sayT>0 && q.say) bubble(ctx,q.say,q.x,q.y-34); });
+  GUIDES.forEach(q => { tag(ctx,q,q.x,q.y,false); if(q.sayT>0 && q.say) bubble(ctx,q.say,q.x,q.y-34); });
   { const v = visPos(me,t); tag(ctx,me,v.x,v.y,true); if(me.sayT>0) bubble(ctx,me.say,v.x,v.y-34); }
   /* 겹쳐 있어도 가장 가까운 등불 하나만 보여줘요 */
   let near = null, nd = 70;
@@ -1662,6 +1916,7 @@ $('#helpBtn').onclick = () => openCard(`
     <div class="tip"><i>🚶</i><span>방향키·WASD로 이동하거나, 바닥을 클릭/탭하면 그곳으로 걸어가요.</span></div>
     <div class="tip"><i>🏠</i><span>건물 입구에 가까이 가면 <b>입장</b> 버튼(또는 E)이 나타나요.</span></div>
     <div class="tip"><i>🫡</i><span>경례(F)로 근처 주민에게 인사해요.</span></div>
+    <div class="tip"><i>🧭</i><span>파란 이름표에 노란 "NPC" 딱지가 붙은 길잡이·말년선임은 마을을 돌아다니는 안내 NPC예요. 가까이 가서 E로 말을 걸면 마을 설명을 듣고 궁금한 걸 물어볼 수 있어요.</span></div>
     <div class="tip"><i>🚪</i><span>맨 아래 위병소 밖으로 나가려 하면 "복귀마을을 나가겠습니까?"라고 물어봐요. 다시 들어올 때는 초병이 이름과 경례 구호를 확인해요.</span></div>
     <div class="tip"><i>🪑</i><span>벤치·통나무 앞에서 E를 누르면 앉아요. 움직이면 일어나요.</span></div>
     <div class="tip"><i>🏋️</i><span>체력단련장(왼쪽 위)에서 철봉, 벤치프레스, 제자리 멀리뛰기, 아령, 샌드백을 E로 이용해요. 움직이면 끝나요.</span></div>
@@ -1692,7 +1947,7 @@ $('#pledgeBtn').onclick = () => openCard(`
 
 /* ---------- modal ---------- */
 function openCard(html, after){ inModal=true; $('#mcard').innerHTML=html; $('#modal').classList.add('show'); after && after(); }
-function closeModal(){ inModal=false; $('#modal').classList.remove('show'); }
+function closeModal(){ if(guideCur){ net.send({ t:'npc', op:'bye', id:guideCur.id }); guideCur = null; } inModal=false; $('#modal').classList.remove('show'); }
 window.__close = closeModal;
 $('#modal').addEventListener('pointerdown', e => { if(e.target.id==='modal') closeModal(); });
 
