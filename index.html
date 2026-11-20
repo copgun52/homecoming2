@@ -1733,7 +1733,7 @@ function stepGuides(dt){
     }
     if(started && !inModal && q.cd<=0 && d<(tourDone ? 130 : 240)){
       q.cd = tourDone ? 45 : 16; q.sayT = 4.2;
-      const lines = tourDone ? ['안녕하세요! 🫡','궁금한 게 있으면 불러 주세요'] : (q.id==='guide0' ? ['🧭 처음 오셨나요? E를 눌러 말을 걸어 보세요!','마을 설명이 필요하면 저한테 오세요!'] : ['☕ 어서 와요! 마을 생활 팁 알려 드릴게요','저한테 E로 말을 걸어 보세요']);
+      const lines = tourDone ? ['안녕하세요! 🫡','궁금한 게 있으면 불러 주세요'] : (q.id==='guide0' ? ['마을 설명이 필요하면 저한테 오세요!'] : ['☕ 어서 와요! 마을 생활 팁 알려 드릴게요','저한테 말을 걸어 보세요']);
       q.say = lines[Math.floor(Math.random()*lines.length)];
     }
   });
@@ -1959,12 +1959,12 @@ $('#helpBtn').onclick = () => openCard(`
     <div class="tip"><i>🚶</i><span>방향키·WASD로 이동하거나, 바닥을 클릭/탭하면 그곳으로 걸어가요.</span></div>
     <div class="tip"><i>🏠</i><span>건물 입구에 가까이 가면 <b>입장</b> 버튼(또는 E)이 나타나요.</span></div>
     <div class="tip"><i>🫡</i><span>경례(F)로 근처 주민에게 인사해요.</span></div>
-    <div class="tip"><i>🧭</i><span>파란 이름표에 노란 "NPC" 딱지가 붙은 길잡이·말년선임은 마을을 돌아다니는 안내 NPC예요. 가까이 가서 E로 말을 걸면 마을 설명을 듣고 궁금한 걸 물어볼 수 있어요.</span></div>
+    <div class="tip"><i>🧭</i><span>파란 이름표에 노란 "NPC" 딱지가 붙은 길잡이·말년선임은 마을을 돌아다니는 안내 NPC예요. 가까이 가서 말을 걸면 마을 설명을 듣고 궁금한 걸 물어볼 수 있어요.</span></div>
     <div class="tip"><i>🚪</i><span>맨 아래 위병소 밖으로 나가려 하면 "복귀마을을 나가겠습니까?"라고 물어봐요. 다시 들어올 때는 초병이 이름과 경례 구호를 확인해요.</span></div>
     <div class="tip"><i>🪑</i><span>벤치·통나무 앞에서 E를 누르면 앉아요. 움직이면 일어나요.</span></div>
-    <div class="tip"><i>🏋️</i><span>체력단련장(왼쪽 위)에서 철봉, 벤치프레스, 제자리 멀리뛰기, 아령, 샌드백을 E로 이용해요. 움직이면 끝나요.</span></div>
+    <div class="tip"><i>🏋️</i><span>체력단련장(왼쪽 위)에서 철봉, 벤치프레스, 제자리 멀리뛰기, 아령, 샌드백을 이용해요. 움직이면 끝나요.</span></div>
     <div class="tip"><i>🎠</i><span>놀이터(오른쪽 아래 모닥불 위)에서 그네를 탈 수 있어요.</span></div>
-    <div class="tip"><i>🪙</i><span>분수 근처에서 E로 소원을 빌고, 표지판 앞에서 E로 축하 폭죽을 터뜨려요.</span></div>
+    <div class="tip"><i>🪙</i><span>분수 근처에서 소원을 빌고, 표지판 앞에서 축하 폭죽을 터뜨려요.</span></div>
     <div class="tip"><i>😄</i><span>숫자 1~5로 감정을 표현해요 (😄 👏 💪 😭 🫡).</span></div>
     <div class="tip"><i>🏮</i><span>오늘의 다짐을 적으면 광장에 내 등불이 걸려요. 등불 가까이 가면 내용이 보여요.</span></div>
     <p class="note">💬 채팅과 접속·퇴장 기록(이름, 시각)은 부적절한 내용을 확인하려고 <b>운영자가 볼 수 있게 30일간 저장</b>돼요. 개인정보는 적지 마세요.</p>
